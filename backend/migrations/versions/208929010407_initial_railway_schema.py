@@ -1,8 +1,8 @@
-"""create core tables
+"""initial_railway_schema
 
-Revision ID: 2960263c7647
-Revises: 5a15c1961f1d
-Create Date: 2026-10-17 07:45:37.710945
+Revision ID: 208929010407
+Revises: 
+Create Date: 2026-10-17 13:55:01.589149
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '2960263c7647'
-down_revision: Union[str, Sequence[str], None] = '5a15c1961f1d'
+revision: str = '208929010407'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -31,20 +31,14 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('devices',
-    sa.Column('id', sa.Uuid(), nullable=False),
-    sa.Column('external_id', sa.String(length=100), nullable=False),
-    sa.Column('hostname', sa.String(length=255), nullable=False),
-    sa.Column('ip_address', sa.String(length=50), nullable=False),
-    sa.Column('device_type', sa.String(length=50), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=False),
-    sa.Column('source_system', sa.String(length=50), nullable=False),
-    sa.Column('source_timestamp', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('ingested_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.PrimaryKeyConstraint('id')
+    op.create_table('stations',
+    sa.Column('code', sa.String(length=10), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('division', sa.String(length=50), nullable=False),
+    sa.Column('zone', sa.String(length=50), nullable=False),
+    sa.PrimaryKeyConstraint('code')
     )
-    op.create_index(op.f('ix_devices_external_id'), 'devices', ['external_id'], unique=False)
-    op.create_index(op.f('ix_devices_hostname'), 'devices', ['hostname'], unique=False)
+    op.create_index(op.f('ix_stations_division'), 'stations', ['division'], unique=False)
     op.create_table('users',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
@@ -55,6 +49,24 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
+    op.create_table('devices',
+    sa.Column('id', sa.Uuid(), nullable=False),
+    sa.Column('external_id', sa.String(length=100), nullable=False),
+    sa.Column('hostname', sa.String(length=255), nullable=False),
+    sa.Column('ip_address', sa.String(length=50), nullable=False),
+    sa.Column('category', sa.String(length=50), nullable=False),
+    sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('station_code', sa.String(length=10), nullable=False),
+    sa.Column('source_system', sa.String(length=50), nullable=False),
+    sa.Column('source_timestamp', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('ingested_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['station_code'], ['stations.code'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_devices_category'), 'devices', ['category'], unique=False)
+    op.create_index(op.f('ix_devices_external_id'), 'devices', ['external_id'], unique=False)
+    op.create_index(op.f('ix_devices_hostname'), 'devices', ['hostname'], unique=False)
+    op.create_index(op.f('ix_devices_station_code'), 'devices', ['station_code'], unique=False)
     op.create_table('alarms',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('external_id', sa.String(length=100), nullable=False),
@@ -62,24 +74,36 @@ def upgrade() -> None:
     sa.Column('severity', sa.String(length=20), nullable=False),
     sa.Column('message', sa.String(length=500), nullable=False),
     sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('acked_by', sa.String(length=100), nullable=True),
+    sa.Column('acked_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('ack_note', sa.String(length=500), nullable=True),
     sa.Column('first_seen', sa.DateTime(timezone=True), nullable=False),
     sa.Column('last_seen', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('source_system', sa.String(length=50), nullable=False),
     sa.Column('ingested_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['device_id'], ['devices.id'], ),
+    sa.ForeignKeyConstraint(['device_id'], ['devices.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_alarms_device_id'), 'alarms', ['device_id'], unique=False)
+    op.create_index(op.f('ix_alarms_severity'), 'alarms', ['severity'], unique=False)
+    op.create_index(op.f('ix_alarms_status'), 'alarms', ['status'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_alarms_status'), table_name='alarms')
+    op.drop_index(op.f('ix_alarms_severity'), table_name='alarms')
+    op.drop_index(op.f('ix_alarms_device_id'), table_name='alarms')
     op.drop_table('alarms')
-    op.drop_index(op.f('ix_users_email'), table_name='users')
-    op.drop_table('users')
+    op.drop_index(op.f('ix_devices_station_code'), table_name='devices')
     op.drop_index(op.f('ix_devices_hostname'), table_name='devices')
     op.drop_index(op.f('ix_devices_external_id'), table_name='devices')
+    op.drop_index(op.f('ix_devices_category'), table_name='devices')
     op.drop_table('devices')
+    op.drop_index(op.f('ix_users_email'), table_name='users')
+    op.drop_table('users')
+    op.drop_index(op.f('ix_stations_division'), table_name='stations')
+    op.drop_table('stations')
     op.drop_table('audit_events')
     # ### end Alembic commands ###
