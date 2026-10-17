@@ -5,15 +5,13 @@ from app.db.base import Base
 class Station(Base):
     __tablename__ = "stations"
 
-    # Station Code (जैसे NDLS, GZB, LKO)
     code: Mapped[str] = mapped_column(String(10), primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
-    
-    # Division: DLI, MB, LKO, UMB, JAT, FZR
-    division: Mapped[str] = mapped_column(String(50), index=True) 
-    
-    # Zone: Northern Railway (NR)
+    division: Mapped[str] = mapped_column(String(50), index=True)
     zone: Mapped[str] = mapped_column(String(50), default="NR")
     
-    # Relationships
+    # ये दो नई फील्ड्स जोड़नी हैं
+    tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    station_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     devices: Mapped[list["Device"]] = relationship(back_populates="station", cascade="all, delete-orphan")
