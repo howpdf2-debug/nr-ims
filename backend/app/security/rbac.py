@@ -8,6 +8,7 @@ class Permission(StrEnum):
     DEVICE_WRITE = "device:write" 
     ALARM_READ = "alarm:read"
     ALARM_ACK = "alarm:ack"
+    AUDIT_READ = "audit:read" # <-- नई परमिशन
 
 class Role(StrEnum):
     IRCA_ADMIN = "irca_admin"
@@ -15,12 +16,12 @@ class Role(StrEnum):
     TIER1_INCHARGE = "tier1_incharge"
     OPERATOR = "operator"
 
-# भूमिकाओं और अनुमतियों का मैट्रिक्स
 ROLE_PERMISSIONS = {
-    Role.IRCA_ADMIN: set(Permission), # IRCA के पास सब कुछ है
+    Role.IRCA_ADMIN: set(Permission), # IRCA Admin के पास सब कुछ
     Role.DIVISIONAL_ADMIN: {
         Permission.DEVICE_READ, Permission.DEVICE_WRITE, 
         Permission.ALARM_READ, Permission.ALARM_ACK
+        # नोट: इनके पास AUDIT_READ नहीं है
     },
     Role.TIER1_INCHARGE: {
         Permission.DEVICE_READ, Permission.DEVICE_WRITE, 

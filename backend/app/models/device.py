@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Uuid, func, ForeignKey
+from sqlalchemy import String, DateTime, Uuid, func, ForeignKey, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -12,16 +12,24 @@ class Device(Base):
     hostname: Mapped[str] = mapped_column(String(255), index=True)
     ip_address: Mapped[str] = mapped_column(String(50))
     
+    # Category: router, switch, counter, ts, bts, modem
     category: Mapped[str] = mapped_column(String(50), index=True)
     status: Mapped[str] = mapped_column(String(20), default="unknown")
     
     station_code: Mapped[str] = mapped_column(ForeignKey("stations.code", ondelete="CASCADE"), index=True)
     
+    # लोकल मैप के लिए
+    parent_device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
+    position_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    
     source_system: Mapped[str] = mapped_column(String(50))
     source_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
     station: Mapped["Station"] = relationship(back_populates="devices")
     alarms: Mapped[list["Alarm"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     interfaces: Mapped[list["Interface"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    
+    children: Mapped[list["Device"]] = relationship("Device", back_populates="parent")
+    parent: Mapped["Device | None"] = relationship("Device", back_populates="children", remote_side=[id])

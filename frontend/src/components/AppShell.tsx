@@ -1,14 +1,18 @@
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Bell, LogOut, ShieldAlert, GitBranch, Settings } from "lucide-react";
+import { LayoutDashboard, Bell, LogOut, ShieldAlert, GitBranch, Settings, Wrench, ShieldCheck } from "lucide-react";
 
 export default function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const token = localStorage.getItem("token");
+  let userRole = "operator";
+  if (token) { try { userRole = JSON.parse(atob(token.split('.')[1])).role || "operator"; } catch (e) {} }
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
-  };
+  const handleLogout = () => { localStorage.removeItem("token"); navigate("/"); };
+
+  const canManageStations = userRole.includes("admin");
+  const isIrcaAdmin = userRole === "irca_admin"; // <-- सिर्फ IRCA Admin
 
   return (
     <div className="app-shell">
@@ -19,31 +23,31 @@ export default function AppShell() {
         </div>
         
         <nav>
-          <Link to="/dashboard" className={`nav-item ${location.pathname === '/dashboard' ? 'active' : ''}`}>
-            <LayoutDashboard size={20} /> Global Dashboard
-          </Link>
-          <Link to="/topology" className={`nav-item ${location.pathname === '/topology' ? 'active' : ''}`}>
-            <GitBranch size={20} /> Topology Map
-          </Link>
-          <Link to="/stations" className={`nav-item ${location.pathname === '/stations' ? 'active' : ''}`}>
-            <Settings size={20} /> Manage Stations
-          </Link>
-          <Link to="/alarms" className={`nav-item ${location.pathname === '/alarms' ? 'active' : ''}`}>
-            <Bell size={20} /> Alarm Center
-          </Link>
+          <Link to="/dashboard" className={`nav-item ${location.pathname === '/dashboard' ? 'active' : ''}`}><LayoutDashboard size={20} /> Global Dashboard</Link>
+          <Link to="/topology" className={`nav-item ${location.pathname === '/topology' ? 'active' : ''}`}><GitBranch size={20} /> Topology Map</Link>
+          {canManageStations && <Link to="/stations" className={`nav-item ${location.pathname === '/stations' ? 'active' : ''}`}><Settings size={20} /> Manage Stations</Link>}
+          <Link to="/alarms" className={`nav-item ${location.pathname === '/alarms' ? 'active' : ''}`}><Bell size={20} /> Alarm Center</Link>
+          <Link to="/actions" className={`nav-item ${location.pathname === '/actions' ? 'active' : ''}`}><Wrench size={20} /> Action Center</Link>
+          
+          {/* Audit Log - सिर्फ IRCA Admin के लिए */}
+          {isIrcaAdmin && (
+            <Link to="/audit" className={`nav-item ${location.pathname === '/audit' ? 'active' : ''}`}>
+              <ShieldCheck size={20} /> Audit Logs
+            </Link>
+          )}
         </nav>
+        
+        <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          Logged in as: <strong style={{ display: 'block', color: 'white', textTransform: 'uppercase' }}>{userRole.replace('_', ' ')}</strong>
+        </div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <h1>Northern Railway (NR)</h1>
-          <button onClick={handleLogout} className="nav-item" style={{ margin: 0, padding: '0.5rem 1rem', width: 'auto', cursor: 'pointer', background: 'transparent' }}>
-            <LogOut size={18} /> Logout
-          </button>
+          <button onClick={handleLogout} className="nav-item" style={{ margin: 0, padding: '0.5rem 1rem', width: 'auto', cursor: 'pointer', background: 'transparent' }}><LogOut size={18} /> Logout</button>
         </header>
-        <div className="page-content">
-          <Outlet />
-        </div>
+        <div className="page-content"><Outlet /></div>
       </main>
     </div>
   );

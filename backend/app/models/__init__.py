@@ -7,4 +7,6 @@ from app.models.link import Link
 from app.models.interface import Interface
 from app.models.action import RemoteAction
 from app.models.configuration_change import ConfigurationChange
-__all__ = ["User", "Station", "Device", "Alarm", "AuditEvent", "Link", "Interface", "RemoteAction", "ConfigurationChange"]
+from app.models.device_link import DeviceLink
+
+__all__ = ["User", "Station", "Device", "Alarm", "AuditEvent", "Link", "Interface", "RemoteAction", "ConfigurationChange", "DeviceLink"]

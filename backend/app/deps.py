@@ -24,16 +24,25 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    user_id = decode_access_token(token)
+    
+    # अब decode_access_token एक Dictionary (dict) रिटर्न करता है
+    payload = decode_access_token(token)
+    if not payload:
+        raise credentials_exception
+        
+    user_id = payload.get("sub")
     if not user_id:
         raise credentials_exception
+
     try:
-        user_uuid = uuid.UUID(user_id)
+        user_uuid = uuid.UUID(str(user_id))
     except ValueError:
         raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
+    
     if user is None or not user.is_active:
         raise credentials_exception
+        
     return user
