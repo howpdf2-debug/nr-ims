@@ -16,9 +16,11 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
+    # डेटाबेस से यूज़र खोजें
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
 
+    # अगर यूज़र नहीं मिला या पासवर्ड गलत है
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -28,5 +30,6 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    # टोकन जनरेट करें
     access_token = create_access_token(subject=str(user.id))
     return {"access_token": access_token, "token_type": "bearer"}

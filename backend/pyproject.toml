@@ -8,6 +8,7 @@ dependencies = [
   "uvicorn[standard]>=0.30",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
+  "email-validator>=2.1",  # <-- यह जोड़ना बहुत ज़रूरी था
   "sqlalchemy[asyncio]>=2.0.30",
   "asyncpg>=0.29",
   "valkey>=6.0",

@@ -5,15 +5,29 @@ from app.models.user import User
 
 class Permission(StrEnum):
     DEVICE_READ = "device:read"
-    DEVICE_WRITE = "device:write"  # <-- यह नई परमिशन जोड़ी गई है
+    DEVICE_WRITE = "device:write" 
     ALARM_READ = "alarm:read"
     ALARM_ACK = "alarm:ack"
 
 class Role(StrEnum):
-    ZONAL_ADMIN = "zonal_admin"
+    IRCA_ADMIN = "irca_admin"
+    DIVISIONAL_ADMIN = "divisional_admin"
+    TIER1_INCHARGE = "tier1_incharge"
+    OPERATOR = "operator"
 
-# Zonal Admin को सारी परमिशन मिलेंगी
-ROLE_PERMISSIONS = {Role.ZONAL_ADMIN: set(Permission)}
+# भूमिकाओं और अनुमतियों का मैट्रिक्स
+ROLE_PERMISSIONS = {
+    Role.IRCA_ADMIN: set(Permission), # IRCA के पास सब कुछ है
+    Role.DIVISIONAL_ADMIN: {
+        Permission.DEVICE_READ, Permission.DEVICE_WRITE, 
+        Permission.ALARM_READ, Permission.ALARM_ACK
+    },
+    Role.TIER1_INCHARGE: {
+        Permission.DEVICE_READ, Permission.DEVICE_WRITE, 
+        Permission.ALARM_READ, Permission.ALARM_ACK
+    },
+    Role.OPERATOR: { Permission.DEVICE_READ, Permission.ALARM_READ }
+}
 
 def require_permission(permission: Permission):
     async def _guard(user: User = Depends(get_current_user)) -> User:
@@ -25,4 +39,3 @@ def require_permission(permission: Permission):
             raise HTTPException(status_code=403, detail="Invalid role")
         return user
     return _guard
-    

@@ -1,4 +1,4 @@
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -10,8 +10,10 @@ class Station(Base):
     division: Mapped[str] = mapped_column(String(50), index=True)
     zone: Mapped[str] = mapped_column(String(50), default="NR")
     
-    # ये दो नई फील्ड्स जोड़नी हैं
     tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
     station_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    
+    # नया फील्ड: पैरेंट स्टेशन (जैसे KEH का पैरेंट BSB है)
+    parent_station_code: Mapped[str | None] = mapped_column(ForeignKey("stations.code"), nullable=True)
 
     devices: Mapped[list["Device"]] = relationship(back_populates="station", cascade="all, delete-orphan")
