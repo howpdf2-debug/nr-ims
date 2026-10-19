@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Pages
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DivisionDetail from "./pages/DivisionDetail";
@@ -10,31 +9,22 @@ import DeviceDetail from "./pages/DeviceDetail";
 import StationManagement from "./pages/StationManagement";
 import Topology from "./pages/Topology";
 import Alarms from "./pages/Alarms";
-import ActionCenter from "./pages/ActionCenter"; // <-- नया पेज
+import ActionCenter from "./pages/ActionCenter";
+import AuditLog from "./pages/AuditLog";
+import DiscoveryCenter from "./pages/DiscoveryCenter";
+import UserManagement from "./pages/UserManagement"; // <-- नया
 
-// Components
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 30000,
-    },
-  },
-});
+const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 30000 } } });
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public Route */}
           <Route path="/" element={<Login />} />
-
-          {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -44,9 +34,10 @@ function App() {
               <Route path="/stations" element={<StationManagement />} />
               <Route path="/topology" element={<Topology />} />
               <Route path="/alarms" element={<Alarms />} />
-              <Route path="/actions" element={<ActionCenter />} /> {/* <-- नया राउट */}
-              
-              {/* डिफ़ॉल्ट रास्ता */}
+              <Route path="/actions" element={<ActionCenter />} />
+              <Route path="/audit" element={<AuditLog />} />
+              <Route path="/discovery" element={<DiscoveryCenter />} />
+              <Route path="/users" element={<UserManagement />} /> {/* <-- नया राउट */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
@@ -55,5 +46,4 @@ function App() {
     </QueryClientProvider>
   );
 }
-
 export default App;

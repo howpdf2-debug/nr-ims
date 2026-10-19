@@ -7,98 +7,78 @@ from app.models.device import Device
 from app.models.alarm import Alarm
 from app.models.station import Station
 from app.models.link import Link
-from app.models.interface import Interface
 from app.models.device_link import DeviceLink
 
-# IRCA को यहाँ से हटा दिया गया है
-DIVISIONS = {
-    "LKO": ["LKO", "BSB", "PRG", "RBL", "SLN"],
-    "MB": ["MB", "HW"],
-    "UMB": ["UMB", "DDN"],
-    "FZR": ["LDH", "JUC", "FZR"],
-    "JAT": ["JAT"],
-    "DLI": ["NDLS", "GZB"]
-}
-DIV_IP_MAP = {"LKO": 1, "MB": 2, "UMB": 3, "FZR": 4, "JAT": 5, "DLI": 6}
+STATIONS = [
+    # Core Network
+    ("IRCA", "IRCA Core", "IRCA", "Tier 0"),
+    
+    # LKO Division
+    ("LKO", "LKO Station", "LKO", "Tier 1"), ("BSB", "BSB Station", "LKO", "Tier 1"), ("PRG", "PRG Station", "LKO", "Tier 1"),
+    
+    # MB Division
+    ("MB", "MB Station", "MB", "Tier 1"), ("HW", "HW Station", "MB", "Tier 1"),
+    
+    # UMB Division
+    ("UMB", "UMB Station", "UMB", "Tier 1"), ("DDN", "DDN Station", "UMB", "Tier 1"),
+    
+    # DLI Division
+    ("NDLS", "NDLS Station", "DLI", "Tier 1"), ("GZB", "GZB Station", "DLI", "Tier 1"),
+    
+    # FZR Division (नया जोड़ा गया)
+    ("FZR", "FZR Station", "FZR", "Tier 1"), ("LDH", "LDH Station", "FZR", "Tier 1"), ("JUC", "JUC Station", "FZR", "Tier 1"),
+    
+    # JAT Division (नया जोड़ा गया)
+    ("JAT", "JAT Station", "JAT", "Tier 1")
+]
 
 async def seed():
     async with async_session_maker() as db:
         print("Clearing old data...")
-        await db.execute(delete(Alarm)); await db.execute(delete(DeviceLink))
-        await db.execute(delete(Interface)); await db.execute(delete(Link))
-        await db.execute(delete(Device)); await db.execute(delete(Station))
+        await db.execute(delete(Alarm))
+        await db.execute(delete(DeviceLink))
+        await db.execute(delete(Link))
+        await db.execute(delete(Device))
+        await db.execute(delete(Station))
         await db.commit()
 
-        links_to_add = []
-        
-        # --- 1. CREATE IRCA CORE NETWORK ---
-        print("Seeding IRCA Core Network...")
-        irca_st = Station(code="IRCA", name="IRCA Core", division="IRCA", tier="Tier 0", station_type="Core")
-        db.add(irca_st)
-        
-        irca_router = Device(id=uuid.uuid4(), external_id="IRCA-RTR", hostname="irca-core-rtr", ip_address="10.0.0.1", category="router", status="up", station_code="IRCA", source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-        db.add(irca_router)
-        
-        for i in range(1, 4):
-            srv = Device(id=uuid.uuid4(), external_id=f"IRCA-SRV{i}", hostname=f"irca-server-{i}", ip_address=f"10.0.1.{i}", category="server", status="up", station_code="IRCA", parent_device_id=irca_router.id, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-            db.add(srv)
-            links_to_add.append(DeviceLink(id=uuid.uuid4(), source_device_id=irca_router.id, destination_device_id=srv.id, media_type="ofc", description=f"10G Uplink to Server {i}"))
-        
+        print("Seeding Stations and Devices with Alarms...")
+        for code, name, div, tier in STATIONS:
+            db.add(Station(code=code, name=name, division=div, tier=tier, station_type="PRS"))
+            
+            # BSB और MB को जानबूझकर डाउन किया गया है
+            r_status = "down" if code in ["BSB", "MB"] else "up"
+            router = Device(
+                id=uuid.uuid4(), external_id=f"{code}-RTR", hostname=f"{code.lower()}-rtr", 
+                ip_address=f"10.10.10.1", category="router", status=r_status, 
+                station_code=code, source_system="simulator", source_timestamp=datetime.now(timezone.utc)
+            )
+            db.add(router)
+            
+            # अगर डाउन है, तो अलार्म जनरेट करें
+            if r_status == "down":
+                db.add(Alarm(
+                    id=uuid.uuid4(), external_id=f"alm-{code}", device_id=router.id, 
+                    severity="critical", message=f"Router unreachable at {code}", 
+                    status="active", first_seen=datetime.now(timezone.utc), last_seen=datetime.now(timezone.utc)
+                ))
         await db.commit()
 
-        # --- 2. CREATE DIVISIONS & TIER-1 STATIONS ---
-        st_idx = 10
-        for div, stations in DIVISIONS.items():
-            d_ip = DIV_IP_MAP[div]
-            for code in stations:
-                st_idx += 1
-                st = Station(code=code, name=f"{code} Station", division=div, tier="Tier 1", station_type="PRS")
-                db.add(st)
-
-                r_status = "down" if code in ["BSB", "MB", "NDLS"] else "up"
-                router = Device(id=uuid.uuid4(), external_id=f"{code}-RTR", hostname=f"{code.lower()}-rtr", ip_address=f"10.{d_ip}.{st_idx}.1", category="router", status=r_status, station_code=code, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-                db.add(router)
-                
-                if r_status == "down":
-                    db.add(Alarm(id=uuid.uuid4(), external_id=f"alm-{code}", device_id=router.id, severity="critical", message=f"Router unreachable at {code}", status="active", first_seen=datetime.now(timezone.utc), last_seen=datetime.now(timezone.utc)))
-
-                switches = []
-                num_switches = 5 if code == "BSB" else 2
-                for sw_idx in range(1, num_switches + 1):
-                    sw = Device(id=uuid.uuid4(), external_id=f"{code}-SW{sw_idx}", hostname=f"{code.lower()}-sw-{sw_idx}", ip_address=f"10.{d_ip}.{st_idx}.1{sw_idx}", category="switch", status="up", station_code=code, parent_device_id=router.id, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-                    db.add(sw); switches.append(sw)
-                    links_to_add.append(DeviceLink(id=uuid.uuid4(), source_device_id=router.id, destination_device_id=sw.id, media_type="ofc", description=f"OFC to SW{sw_idx}"))
-
-                for i in range(1, 6):
-                    sw = switches[i % num_switches]
-                    cnt = Device(id=uuid.uuid4(), external_id=f"{code}-PRS{i}", hostname=f"{code.lower()}-prs-{i}", ip_address=f"10.{d_ip}.{st_idx}.2{i}", category="counter", status="up", station_code=code, parent_device_id=sw.id, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-                    db.add(cnt)
-                    links_to_add.append(DeviceLink(id=uuid.uuid4(), source_device_id=sw.id, destination_device_id=cnt.id, media_type="copper", description=f"Cu to PRS-{i}"))
-
-                for i in range(1, 6):
-                    sw = switches[i % num_switches]
-                    cnt = Device(id=uuid.uuid4(), external_id=f"{code}-UTS{i}", hostname=f"{code.lower()}-uts-{i}", ip_address=f"10.{d_ip}.{st_idx}.3{i}", category="counter", status="up", station_code=code, parent_device_id=sw.id, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-                    db.add(cnt)
-                    links_to_add.append(DeviceLink(id=uuid.uuid4(), source_device_id=sw.id, destination_device_id=cnt.id, media_type="copper", description=f"Cu to UTS-{i}"))
-
-                if code == "BSB":
-                    for i in range(1, 26):
-                        sw = switches[i % 5]
-                        cnt = Device(id=uuid.uuid4(), external_id=f"BSB-ATVM{i}", hostname=f"bsb-atvm-{i}", ip_address=f"10.{d_ip}.{st_idx}.4{i}", category="counter", status="up", station_code="BSB", parent_device_id=sw.id, source_system="simulator", source_timestamp=datetime.now(timezone.utc))
-                        db.add(cnt)
-                        links_to_add.append(DeviceLink(id=uuid.uuid4(), source_device_id=sw.id, destination_device_id=cnt.id, media_type="copper", description=f"Cu to ATVM-{i}"))
+        print("Seeding IRCA to Divisional Links...")
+        # IRCA से सभी डिवीजन्स के मुख्य स्टेशन तक लिंक्स
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="LKO", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0))
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="MB", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0))
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="UMB", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0))
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="NDLS", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0))
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="FZR", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0)) # नया
+        db.add(Link(id=uuid.uuid4(), source_station="IRCA", destination_station="JAT", provider="Railway", bandwidth_mbps=10000, status="up", latency_ms=2.0)) # नया
+        
+        # डिवीजन्स के अंदरूनी लिंक्स (LKO - BSB)
+        db.add(Link(id=uuid.uuid4(), source_station="LKO", destination_station="BSB", provider="Railway", bandwidth_mbps=1000, status="up", latency_ms=5.0))
+        db.add(Link(id=uuid.uuid4(), source_station="LKO", destination_station="BSB", provider="BSNL", bandwidth_mbps=10, status="degraded", latency_ms=120.0, packet_loss_pct=15.0, crc_errors=450))
 
         await db.commit()
-        for link in links_to_add: db.add(link)
-        
-        # Inter-Station Links
-        db.add(Link(id=uuid.uuid4(), source_station="LKO", destination_station="BSB", provider="Railway", bandwidth_mbps=1000, status="up"))
-        db.add(Link(id=uuid.uuid4(), source_station="LKO", destination_station="BSB", provider="BSNL", bandwidth_mbps=10, status="down"))
-        db.add(Link(id=uuid.uuid4(), source_station="MB", destination_station="HW", provider="Railway", bandwidth_mbps=1000, status="up"))
-        db.add(Link(id=uuid.uuid4(), source_station="UMB", destination_station="DDN", provider="Railway", bandwidth_mbps=1000, status="up"))
-        
-        await db.commit()
-        print("✅ Seed Complete: IRCA is now a Core Network!")
+        print("✅ Seed Complete: All 7 Divisions, Data and Alarms created!")
 
 if __name__ == "__main__":
     asyncio.run(seed())

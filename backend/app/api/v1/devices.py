@@ -39,26 +39,55 @@ async def create_device(req: DeviceCreate, db: AsyncSession = Depends(get_db), c
     db.add(new_device); await db.commit()
     return {"message": "Device created", "id": str(new_device.id)}
 
+@router.get("/{device_id}")
+async def get_device_details(device_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.DEVICE_READ))):
+    stmt = select(Device).where(Device.id == device_id)
+    res = await db.execute(stmt)
+    device = res.scalar_one_or_none()
+    if not device: raise HTTPException(status_code=404, detail="Device not found")
+
+    int_stmt = select(Interface).where(Interface.device_id == device.id)
+    int_res = await db.execute(int_stmt)
+    interfaces = int_res.scalars().all()
+
+    # डमी OSPF डेटा
+    ospf_neighbors = [
+        {"neighbor_ip": "10.10.1.5", "state": "FULL", "interface": "Gi0/1", "uptime": "12d 4h"},
+        {"neighbor_ip": "10.10.2.5", "state": "FULL", "interface": "Gi0/2", "uptime": "10d 2h"},
+    ]
+
+    return {
+        "device": {
+            "id": str(device.id), "hostname": device.hostname, "ip_address": device.ip_address,
+            "status": device.status, "category": device.category, "is_maintenance": device.is_maintenance,
+            "uptime": "45 days, 12 hours", "cpu_usage": 24, "memory_usage": 58
+        },
+        "interfaces": [
+            {
+                "id": str(i.id), "name": i.name, "ip_address": i.ip_address,
+                "status": i.status, "description": i.description,
+                "in_mbps": i.in_mbps, "out_mbps": i.out_mbps, "errors": i.errors
+            } for i in interfaces
+        ],
+        "ospf_neighbors": ospf_neighbors
+    }
+
 @router.delete("/{device_id}")
 async def delete_device(device_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.DEVICE_WRITE))):
     device = (await db.execute(select(Device).where(Device.id == device_id))).scalar_one_or_none()
     if not device: raise HTTPException(404, "Device not found")
-    
-    # Find all children recursively
-    all_ids_to_delete = [device.id]
+    all_ids = [device.id]
     children = (await db.execute(select(Device).where(Device.parent_device_id == device.id))).scalars().all()
     while children:
-        next_children = []
-        for child in children:
-            all_ids_to_delete.append(child.id)
-            sub_children = (await db.execute(select(Device).where(Device.parent_device_id == child.id))).scalars().all()
-            next_children.extend(sub_children)
-        children = next_children
-
-    # Delete links, interfaces, alarms, and devices
-    await db.execute(delete(DeviceLink).where((DeviceLink.source_device_id.in_(all_ids_to_delete)) | (DeviceLink.destination_device_id.in_(all_ids_to_delete))))
-    await db.execute(delete(Interface).where(Interface.device_id.in_(all_ids_to_delete)))
-    await db.execute(delete(Alarm).where(Alarm.device_id.in_(all_ids_to_delete)))
-    await db.execute(delete(Device).where(Device.id.in_(all_ids_to_delete)))
+        next_c = []
+        for c in children:
+            all_ids.append(c.id)
+            sub = (await db.execute(select(Device).where(Device.parent_device_id == c.id))).scalars().all()
+            next_c.extend(sub)
+        children = next_c
+    await db.execute(delete(DeviceLink).where((DeviceLink.source_device_id.in_(all_ids)) | (DeviceLink.destination_device_id.in_(all_ids))))
+    await db.execute(delete(Interface).where(Interface.device_id.in_(all_ids)))
+    await db.execute(delete(Alarm).where(Alarm.device_id.in_(all_ids)))
+    await db.execute(delete(Device).where(Device.id.in_(all_ids)))
     await db.commit()
-    return {"message": "Device and all its children deleted successfully"}
+    return {"message": "Device and all children deleted"}

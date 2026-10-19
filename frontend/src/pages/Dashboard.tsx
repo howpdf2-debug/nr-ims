@@ -18,20 +18,33 @@ export default function Dashboard() {
   const totalDevices = devices.length;
   const activeAlarms = alarms.length;
   
-  // IRCA को डिवीजन लिस्ट से अलग करें
   const ircaDiv = divisions.find((d: any) => d.division === "IRCA");
   const otherDivisions = divisions.filter((d: any) => d.division !== "IRCA");
 
   return (
-    <div>
+    <div style={{ paddingBottom: '3rem' }}>
       <div className="kpi-grid">
-        <div className="kpi-card"><div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)' }}><Server size={24} /></div><div><div className="kpi-value">{totalDevices}</div><div className="kpi-label">Total Devices</div></div></div>
-        <div className="kpi-card"><div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)' }}><AlertTriangle size={24} /></div><div><div className="kpi-value">{activeAlarms}</div><div className="kpi-label">Active Incidents</div></div></div>
-        <div className="kpi-card"><div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)' }}><ShieldCheck size={24} /></div><div><div className="kpi-value">98.5%</div><div className="kpi-label">Compliance</div></div></div>
-        <div className="kpi-card"><div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-amber)' }}><Activity size={24} /></div><div><div className="kpi-value">45%</div><div className="kpi-label">Traffic</div></div></div>
+        <div className="kpi-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/topology')}>
+          <div className="kpi-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-blue)' }}><Server size={24} /></div>
+          <div><div className="kpi-value">{totalDevices}</div><div className="kpi-label">Total Devices</div></div>
+        </div>
+        
+        <div className="kpi-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/actions')}>
+          <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)' }}><AlertTriangle size={24} /></div>
+          <div><div className="kpi-value">{activeAlarms}</div><div className="kpi-label">Active Incidents</div></div>
+        </div>
+        
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)' }}><ShieldCheck size={24} /></div>
+          <div><div className="kpi-value">98.5%</div><div className="kpi-label">Compliance</div></div>
+        </div>
+        
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-amber)' }}><Activity size={24} /></div>
+          <div><div className="kpi-value">45%</div><div className="kpi-label">Traffic</div></div>
+        </div>
       </div>
 
-      {/* --- IRCA Core Network (Tier 0) --- */}
       {ircaDiv && (
         <div style={{ marginBottom: '2.5rem' }}>
           <h2 style={{ marginBottom: '1rem', color: 'var(--accent-amber)' }}>Core Network (Tier 0)</h2>
@@ -42,13 +55,15 @@ export default function Dashboard() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <span className={`badge ${ircaDiv.status === 'healthy' ? 'badge-up' : 'badge-down'}`}>{ircaDiv.status === 'healthy' ? 'ALL OK' : 'CRITICAL'}</span>
-              <p style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>{ircaDiv.total_stations} Core Nodes</p>
+              {/* Grammar Fix: Node vs Nodes */}
+              <p style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                {ircaDiv.total_stations} Core Node{ircaDiv.total_stations === 1 ? '' : 's'}
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- Divisions --- */}
       <h2>Divisional Network Health</h2>
       {isLoading ? <p>Loading divisions...</p> : (
         <div className="grid-layout">

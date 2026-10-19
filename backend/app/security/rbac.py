@@ -8,7 +8,8 @@ class Permission(StrEnum):
     DEVICE_WRITE = "device:write" 
     ALARM_READ = "alarm:read"
     ALARM_ACK = "alarm:ack"
-    AUDIT_READ = "audit:read" # <-- नई परमिशन
+    AUDIT_READ = "audit:read"
+    USER_MANAGE = "user:manage"
 
 class Role(StrEnum):
     IRCA_ADMIN = "irca_admin"
@@ -17,16 +18,9 @@ class Role(StrEnum):
     OPERATOR = "operator"
 
 ROLE_PERMISSIONS = {
-    Role.IRCA_ADMIN: set(Permission), # IRCA Admin के पास सब कुछ
-    Role.DIVISIONAL_ADMIN: {
-        Permission.DEVICE_READ, Permission.DEVICE_WRITE, 
-        Permission.ALARM_READ, Permission.ALARM_ACK
-        # नोट: इनके पास AUDIT_READ नहीं है
-    },
-    Role.TIER1_INCHARGE: {
-        Permission.DEVICE_READ, Permission.DEVICE_WRITE, 
-        Permission.ALARM_READ, Permission.ALARM_ACK
-    },
+    Role.IRCA_ADMIN: set(Permission),
+    Role.DIVISIONAL_ADMIN: { Permission.DEVICE_READ, Permission.DEVICE_WRITE, Permission.ALARM_READ, Permission.ALARM_ACK },
+    Role.TIER1_INCHARGE: { Permission.DEVICE_READ, Permission.DEVICE_WRITE, Permission.ALARM_READ, Permission.ALARM_ACK },
     Role.OPERATOR: { Permission.DEVICE_READ, Permission.ALARM_READ }
 }
 
