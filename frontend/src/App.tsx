@@ -12,12 +12,17 @@ import Alarms from "./pages/Alarms";
 import ActionCenter from "./pages/ActionCenter";
 import AuditLog from "./pages/AuditLog";
 import DiscoveryCenter from "./pages/DiscoveryCenter";
-import UserManagement from "./pages/UserManagement"; // <-- नया
+import UserManagement from "./pages/UserManagement";
+import Wallboard from "./pages/Wallboard"; // <-- नया Wallboard पेज इम्पोर्ट किया
 
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 30000 } } });
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 30000 },
+  },
+});
 
 function App() {
   return (
@@ -25,7 +30,12 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
+          
           <Route element={<ProtectedRoute />}>
+            {/* 1. WALLBOARD (AppShell के बाहर, ताकि फुल-स्क्रीन में साइडबार न दिखे) */}
+            <Route path="/wallboard" element={<Wallboard />} />
+
+            {/* 2. REST OF THE APP (AppShell के अंदर - साइडबार और टॉपबार के साथ) */}
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/division/:divCode" element={<DivisionDetail />} />
@@ -37,7 +47,9 @@ function App() {
               <Route path="/actions" element={<ActionCenter />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/discovery" element={<DiscoveryCenter />} />
-              <Route path="/users" element={<UserManagement />} /> {/* <-- नया राउट */}
+              <Route path="/users" element={<UserManagement />} />
+              
+              {/* किसी भी गलत URL पर Dashboard पर भेजें */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>
@@ -46,4 +58,5 @@ function App() {
     </QueryClientProvider>
   );
 }
+
 export default App;

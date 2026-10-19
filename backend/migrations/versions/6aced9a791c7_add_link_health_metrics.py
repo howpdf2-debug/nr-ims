@@ -27,7 +27,7 @@ def upgrade() -> None:
     op.drop_column('links', 'config_version')
     op.drop_column('links', 'is_compliant')
     op.drop_column('links', 'utilization_pct')
-    op.drop_column('remote_actions', 'interface_name')
+    # op.drop_column('remote_actions', 'interface_name')
     # ### end Alembic commands ###
 
 

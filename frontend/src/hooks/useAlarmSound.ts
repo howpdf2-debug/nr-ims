@@ -23,15 +23,18 @@ function playBeep() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    // तेज़ और स्पष्ट आवाज़ के लिए (0.5 मतलब 50% वॉल्यूम)
+    osc.type = "square"; // 'square' wave ज्यादा तेज़ सुनाई देती है
+    osc.frequency.setValueAtTime(1000, ctx.currentTime); 
+    gain.gain.setValueAtTime(0.5, ctx.currentTime); 
+    
+    // 0.5 सेकंड की तेज़ बीप
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.5);
   } catch (e) {
     console.error("Audio playback failed", e);
   }
@@ -41,11 +44,11 @@ export function useAlarmSound() {
   const [isMuted, setIsMuted] = useState(
     () => localStorage.getItem("alarm_mute") === "true"
   );
-  const [isAudioLocked, setIsAudioLocked] = useState(true); // NEW: Track browser lock
+  const [isAudioLocked, setIsAudioLocked] = useState(true);
   const prevAlarmCount = useRef<number>(0);
   const lastBeepTime = useRef<number>(0);
 
-  // ── 1. Audio Unlock Logic (Autoplay Policy Bypass) ──
+  // ── 1. Audio Unlock Logic ──
   useEffect(() => {
     const ctx = getAudioContext();
 
@@ -57,25 +60,23 @@ export function useAlarmSound() {
       if (ctx.state === "suspended") {
         ctx.resume().then(() => {
           setIsAudioLocked(false);
-          playBeep(); // Confirmation beep
+          // क्लिक करते ही एक कन्फर्मेशन बीप बजाएं
+          playBeep(); 
         }).catch(console.error);
       }
     };
 
-    // Check immediately
     checkState();
 
-    // Listen for ANY first click or keypress globally
+    // पेज पर पहले क्लिक या कीप्रेस पर ऑडियो अनलॉक करें
     document.addEventListener("click", unlockAudio, { once: true });
     document.addEventListener("keydown", unlockAudio, { once: true });
 
-    // Sync mute state
     const handleMuteChange = () => {
       setIsMuted(localStorage.getItem("alarm_mute") === "true");
     };
     window.addEventListener("alarm_mute_changed", handleMuteChange);
 
-    // Polling fallback for context state
     const interval = setInterval(checkState, 2000);
 
     return () => {
@@ -97,14 +98,17 @@ export function useAlarmSound() {
   ).length;
 
   useEffect(() => {
-    if (isMuted || isAudioLocked) {
+    if (isMuted) {
       prevAlarmCount.current = criticalAlarms;
       return;
     }
 
+    // अगर ऑडियो लॉक है, तो हम काउंट को अपडेट नहीं करेंगे ताकि क्लिक करने पर बीप बज सके
+    if (isAudioLocked) return;
+
     if (criticalAlarms > prevAlarmCount.current) {
       const now = Date.now();
-      if (now - lastBeepTime.current > 3000) {
+      if (now - lastBeepTime.current > 2000) { // 2 सेकंड का गैप
         playBeep();
         lastBeepTime.current = now;
       }
