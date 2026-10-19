@@ -12,4 +12,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // सबसे बड़ी लाइब्रेरीज को अलग करें
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-charts': ['echarts', 'echarts-for-react'],
+          'vendor-flow': ['reactflow'],
+          'vendor-query': ['@tanstack/react-query'],
+        },
+      },
+    },
+  },
 })
