@@ -14,6 +14,7 @@ from app.api.v1.topology import router as topology_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.discovery import router as discovery_router
 from app.api.v1.users import router as users_router
+from app.api.v1.reports import router as reports_router # <-- 1. नया Reports इम्पोर्ट जोड़ा गया
 
 from app.config import get_settings
 from app.db.session import build_engine
@@ -53,11 +54,10 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(discovery_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
+    app.include_router(reports_router, prefix="/api/v1") # <-- 2. नया Reports राउटर रजिस्टर किया गया
 
     return app
 
 
 # ── Module-level app instance for uvicorn ────────────────────
-# Enables: uvicorn app.main:app (no --factory flag needed)
-# Also used by tests via: from app.main import app
 app = create_app()

@@ -13,7 +13,8 @@ import ActionCenter from "./pages/ActionCenter";
 import AuditLog from "./pages/AuditLog";
 import DiscoveryCenter from "./pages/DiscoveryCenter";
 import UserManagement from "./pages/UserManagement";
-import Wallboard from "./pages/Wallboard"; // <-- नया Wallboard पेज इम्पोर्ट किया
+import Wallboard from "./pages/Wallboard";
+import Reports from "./pages/Reports"; // <-- नया Reports पेज इम्पोर्ट किया
 
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -32,10 +33,10 @@ function App() {
           <Route path="/" element={<Login />} />
           
           <Route element={<ProtectedRoute />}>
-            {/* 1. WALLBOARD (AppShell के बाहर, ताकि फुल-स्क्रीन में साइडबार न दिखे) */}
+            {/* WALLBOARD (AppShell के बाहर, ताकि फुल-स्क्रीन में साइडबार न दिखे) */}
             <Route path="/wallboard" element={<Wallboard />} />
 
-            {/* 2. REST OF THE APP (AppShell के अंदर - साइडबार और टॉपबार के साथ) */}
+            {/* REST OF THE APP (AppShell के अंदर) */}
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/division/:divCode" element={<DivisionDetail />} />
@@ -45,6 +46,7 @@ function App() {
               <Route path="/topology" element={<Topology />} />
               <Route path="/alarms" element={<Alarms />} />
               <Route path="/actions" element={<ActionCenter />} />
+              <Route path="/reports" element={<Reports />} /> {/* <-- नया Reports राउट */}
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/discovery" element={<DiscoveryCenter />} />
               <Route path="/users" element={<UserManagement />} />
