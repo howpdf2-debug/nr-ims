@@ -21,6 +21,9 @@ dependencies = [
   "python-multipart>=0.0.9",
   "httpx>=0.27",
   "tenacity>=8.3",
+  "arq>=0.26,<0.27",
+  "pysnmp>=6.0,<8.0",
+  "icmplib>=3.0,<4.0",
 ]
 
 [project.optional-dependencies]
