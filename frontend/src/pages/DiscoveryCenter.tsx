@@ -8,7 +8,7 @@ export default function DiscoveryCenter() {
   const [showWarning, setShowWarning] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pending" | "rogue">("pending");
 
-  const { data: results = [], isLoading } = useQuery({ queryKey: ["discoveryResults"], queryFn: () => api.get("/discovery/results").then(res => res.data) });
+  const { data: results = [] } = useQuery({ queryKey: ["discoveryResults"], queryFn: () => api.get("/discovery/results").then(res => res.data) });
   const scanMutation = useMutation({ mutationFn: () => api.post("/discovery/scan"), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["discoveryResults"] }) });
   const approveMutation = useMutation({ mutationFn: (id: string) => api.post(`/discovery/approve/${id}`), onSuccess: () => { setShowWarning(null); queryClient.invalidateQueries({ queryKey: ["discoveryResults"] }); } });
   const rejectMutation = useMutation({ mutationFn: (id: string) => api.delete(`/discovery/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["discoveryResults"] }) });

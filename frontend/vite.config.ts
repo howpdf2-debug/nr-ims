@@ -15,12 +15,13 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // सबसे बड़ी लाइब्रेरीज को अलग करें
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['echarts', 'echarts-for-react'],
-          'vendor-flow': ['reactflow'],
-          'vendor-query': ['@tanstack/react-query'],
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (/[\\/](react|react-dom|react-router|react-router-dom)[\\/]/.test(id)) return 'vendor-react'
+          if (/[\\/](echarts|echarts-for-react|zrender)[\\/]/.test(id)) return 'vendor-charts'
+          if (id.includes('reactflow')) return 'vendor-flow'
+          if (id.includes('@tanstack')) return 'vendor-query'
+          return undefined
         },
       },
     },

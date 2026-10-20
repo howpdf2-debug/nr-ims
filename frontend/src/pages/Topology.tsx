@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import StationNode from "../components/StationNode";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ShieldAlert, User, X, Power, RotateCcw, AlertTriangle } from "lucide-react";
+import { Search, X, Power, RotateCcw, AlertTriangle } from "lucide-react";
 
 const nodeTypes = { customNode: StationNode };
 const dagreGraph = new dagre.graphlib.Graph();
@@ -59,8 +59,8 @@ export default function Topology() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["topology"] }); setSelectedEdge(null); }
   });
 
-  const onNodeClick = useCallback((event: any, node: any) => { navigate(`/station/${node.id}`); }, [navigate]);
-  const onEdgeClick = useCallback((event: any, edge: any) => { setSelectedEdge(edge); }, []);
+  const onNodeClick = useCallback((_event: any, node: any) => { navigate(`/station/${node.id}`); }, [navigate]);
+  const onEdgeClick = useCallback((_event: any, edge: any) => { setSelectedEdge(edge); }, []);
 
   const filteredNodes = searchTerm ? nodes.filter(n => n.data.code.toLowerCase().includes(searchTerm.toLowerCase())) : nodes;
 

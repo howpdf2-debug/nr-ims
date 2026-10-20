@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { 
-  Server, Activity, RotateCcw, Power, Terminal, 
+  Activity, RotateCcw, Power, Terminal, 
   AlertTriangle, CheckCircle, ShieldAlert, X, Lock, Ban, Wrench
 } from "lucide-react";
 

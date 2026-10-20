@@ -11,7 +11,7 @@ import dagre from 'dagre';
 import { api } from "../lib/api";
 import StationNode from "../components/StationNode";
 import DeviceNode from "../components/DeviceNode";
-import { ArrowLeft, List, Network, X, Link as LinkIcon, Plus, Trash2, ShieldAlert, User, Server, Filter } from "lucide-react";
+import { ArrowLeft, List, Network, X, Plus, Trash2, ShieldAlert, User, Server, Filter } from "lucide-react";
 
 const nodeTypes = { customNode: StationNode, deviceNode: DeviceNode };
 const dagreGraph = new dagre.graphlib.Graph();
@@ -108,13 +108,13 @@ export default function StationDetail() {
     }
   };
 
-  const onNodeDragStop = useCallback(async (event: any, node: any) => {
+  const onNodeDragStop = useCallback(async (_event: any, node: any) => {
     if(!isAdminMode) return;
     await api.put(`/topology/local/device/${node.id}/position`, { x: node.position.x, y: node.position.y });
   }, [isAdminMode]);
 
-  const onNodeClick = useCallback((event: any, node: any) => { setSelectedNode(node); setSelectedEdge(null); }, []);
-  const onEdgeClick = useCallback((event: any, edge: any) => { setSelectedEdge(edge); setSelectedNode(null); }, []);
+  const onNodeClick = useCallback((_event: any, node: any) => { setSelectedNode(node); setSelectedEdge(null); }, []);
+  const onEdgeClick = useCallback((_event: any, edge: any) => { setSelectedEdge(edge); setSelectedNode(null); }, []);
 
   const displayNodes = filterCategory === "all" ? nodes : nodes.filter(n => n.data.category === filterCategory || n.data.category === 'router'); 
   const displayEdges = edges.filter(e => displayNodes.find(n => n.id === e.source) && displayNodes.find(n => n.id === e.target));

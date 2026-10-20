@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { ShieldCheck, Server, Terminal, Clock } from "lucide-react";
+import { ShieldCheck, Server, Clock } from "lucide-react";
 
 export default function AuditLog() {
   const { data: logs = [], isLoading } = useQuery({

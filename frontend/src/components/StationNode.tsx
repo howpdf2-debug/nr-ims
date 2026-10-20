@@ -1,5 +1,5 @@
 import { Handle, Position } from 'reactflow';
-import { AlertTriangle, CheckCircle, Wifi } from 'lucide-react';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function StationNode({ data }: any) {
   // डमी स्टेटस: अगर स्टेशन का कोड BSB या MB है, तो उसे 'Critical' दिखाएँ
