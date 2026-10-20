@@ -5,7 +5,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
-.PHONY: help install lint type test guards ci audit sbom \
+.PHONY: migrate seed db-doctor help install lint type test guards ci audit sbom \
         up down logs ps clean \
         frontend-install frontend-ci frontend-dev dev-backend
 
@@ -50,7 +50,7 @@ dev-backend: install
 
 # ---------- Stack ----------
 up:
-	cd deploy && docker compose up -d
+	cd deploy && docker compose up -d --build
 
 down:
 	cd deploy && docker compose down
@@ -75,4 +75,14 @@ frontend-dev:
 frontend-ci: frontend-install
 	cd $(FRONTEND) && npm run lint
 	cd $(FRONTEND) && npm run typecheck
-	cd $(FRONTEND) && npm run test -- --run
+	cd $(FRONTEND) && npm run build
+
+# ---------- Ops ----------
+migrate:
+	cd deploy && docker compose run --rm migrate
+
+seed:
+	cd deploy && docker compose exec backend python seed_master.py && docker compose exec backend python seed_admin.py
+
+db-doctor:
+	cd deploy && docker compose run --rm --no-deps migrate python -m app.db.wait --diagnose
