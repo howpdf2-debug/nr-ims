@@ -1,8 +1,11 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Uuid, func, Boolean
+
+from sqlalchemy import Boolean, DateTime, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
+
 
 class DiscoveredDevice(Base):
     __tablename__ = "discovered_devices"

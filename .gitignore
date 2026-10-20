@@ -16,7 +16,6 @@ build/
 .env
 .env.*
 !.env.example
-deploy/.env
 secrets/
 *.pem
 *.key
@@ -42,3 +41,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+*.zip
+diag.txt
+*.bak

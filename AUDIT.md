@@ -38,13 +38,40 @@ Fix: single prefixed variable, fail-fast validation (`NRIMS_IN_CONTAINER` reject
 ## 4. Migrations in production
 Run migrations as a separate one-shot job (`migrate` service / CI deploy step), never inside every app replica. Backend starts only after `service_completed_successfully`. Keep migrations additive (expand/contract), and take a backup first.
 
+## 4b. Aapke `docker-compose.yml` (root) ka analysis
+| # | Problem in your compose | Effect | Fix |
+|---|---|---|---|
+| 1 | No migration step | DB empty -> every API call 500, login fails | `migrate` one-shot service; backend waits for it |
+| 2 | Frontend `80:80`, but nginx must proxy `/api/` (frontend uses relative `/api/v1`) | Login/API return 404 from static nginx | `frontend/deploy/nginx.conf` proxies `/api/` to `backend:8000`; container listens on 8080 (`${HTTP_PORT:-80}:8080`) |
+| 3 | `5432` and `6379` published on 0.0.0.0, Valkey without password | Anyone on the LAN can read/write DB and cache | DB bound to 127.0.0.1, Valkey internal-only + `requirepass` |
+| 4 | Hard-coded `nrims_secure_password`; no `NRIMS_SECRET_KEY` | JWTs signed with the public default key (anyone can forge admin tokens) | `.env` via `make init`; compose refuses to start if unset |
+| 5 | `NRIMS_CORS_ORIGINS=["*"]` with credentials | Unsafe, and rejected in production | Same-origin through nginx -> `[]` |
+| 6 | Valkey `service_started`, no backend healthcheck, frontend waits only for "started" | Race at boot, nginx can crash on unresolved `backend` | healthchecks + `condition: service_healthy` |
+| 7 | `container_name` everywhere | Blocks scaling/parallel stacks | removed |
+| 8 | Old volume + new password | `password authentication failed` | `make reset` (dev) or keep old password in `.env` |
+| 9 | Windows CRLF in `entrypoint.sh` | `exec ... no such file` | Dockerfile strips CR, `.gitattributes` forces LF |
+| 10 | Google Fonts `@import` | Blocked by CSP and fails on air-gapped railway networks | removed, system font stack |
+| 11 | nginx `add_header` in a `location` silently drops security headers | CSP/X-Frame missing | shared include in every location |
+Postgres 15 and Valkey 7.2 are kept so your existing volume stays readable.
+
 ## 5. Commands
 ```
-cd deploy && cp .env.example .env     # fill with: openssl rand -hex 24
-docker compose up -d --build           # db -> migrate -> backend -> frontend
-docker compose exec backend python seed_master.py
-docker compose exec backend python seed_links.py
-docker compose exec backend python seed_admin.py   # prints generated password once
+make init                              # creates .env with random secrets
+make up                                # db -> migrate -> backend -> frontend
+make seed                              # master data, links, users (prints password once)
 make db-doctor                          # explains connectivity failures
 ```
 If your Postgres volume was created with a different password: `docker compose down -v` (dev only).
+
+
+## 6. v3 additions (found while testing in GitHub Codespaces)
+| Finding | Fix |
+|---|---|
+| Codespace had the **old v1 zip** (deploy/ layout, no `make init`) | `FIX_VERSION` marker + verify step in the apply commands |
+| `make up` failed with 11 "variable is missing" errors when `.env` did not exist | `make up`/`make seed` now auto-create `.env` |
+| `up --wait` with a one-shot `migrate` container is Compose-version dependent | replaced by `scripts/wait_ready.sh` (polls `/readyz`, prints logs on failure) |
+| Seed password was random and easy to miss | `make init` stores one in `.env`; `make creds` prints it |
+| Integration tests could not reach Valkey; lockout test locked a real user for 15 min | Valkey on 127.0.0.1 only; `make test-integration`; lockout test uses a probe account and cleans up |
+| Unpinned deps (`>=`) -> builds differ between Codespace (py3.14) and Docker (py3.12) | `backend/constraints.txt` (pinned, tested on py3.12); `make lock` refreshes it |
+| `make ci` failed: 273 ruff + 76 mypy findings | ruff 0 findings, mypy 0 errors (lint also caught a regression I had introduced in links/topology) |
+| `nr-ims-fixed.zip` was committed to git | `*.zip` in `.gitignore` |

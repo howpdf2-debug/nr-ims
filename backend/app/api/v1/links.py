@@ -30,7 +30,7 @@ async def get_all_links(db: AsyncSession = Depends(get_db),
                         user: User = Depends(require_permission(Permission.DEVICE_READ))):
     vis = await _visible_codes(db, user)
     links = (await db.execute(select(Link))).scalars().all()
-    return [l for l in links if l.source_station in vis or l.destination_station in vis]
+    return [lk for lk in links if lk.source_station in vis or lk.destination_station in vis]
 
 
 @router.post("/", status_code=201)

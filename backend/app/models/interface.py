@@ -1,7 +1,14 @@
 import uuid
-from sqlalchemy import String, ForeignKey, Uuid, Float, Integer
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Float, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.device import Device
+
 
 class Interface(Base):
     __tablename__ = "interfaces"

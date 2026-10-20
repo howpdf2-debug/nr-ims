@@ -1,14 +1,17 @@
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import select, update
-from app.db.session import async_session_maker
+
 from app.config import Env, get_settings
+from app.db.session import async_session_maker
 
 if get_settings().env is Env.PRODUCTION:
     raise SystemExit("simulate_fault.py is disabled in production")
-from app.models.device import Device
 from app.models.alarm import Alarm
+from app.models.device import Device
+
 
 async def simulate():
     async with async_session_maker() as db:
@@ -32,8 +35,8 @@ async def simulate():
                     severity="critical", 
                     message=f"Router unreachable at {d.station_code}", 
                     status="active", 
-                    first_seen=datetime.now(timezone.utc), 
-                    last_seen=datetime.now(timezone.utc)
+                    first_seen=datetime.now(UTC), 
+                    last_seen=datetime.now(UTC)
                 )
                 db.add(a)
         await db.commit()

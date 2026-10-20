@@ -41,9 +41,10 @@ async def get_report_summary(db: AsyncSession = Depends(get_db),
 
     sev_q = scope_stations(select(Alarm.severity, func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
                            .join(Station, Device.station_code == Station.code), user).group_by(Alarm.severity)
-    top_q = scope_stations(select(Station.name, func.count(Alarm.id).label("c")).join(Device, Device.station_code == Station.code)
-                           .join(Alarm, Alarm.device_id == Device.id), user
-                           ).group_by(Station.name).order_by(func.count(Alarm.id).desc()).limit(5)
+    top_base = (select(Station.name, func.count(Alarm.id).label("c"))
+                .join(Device, Device.station_code == Station.code)
+                .join(Alarm, Alarm.device_id == Device.id))
+    top_q = (scope_stations(top_base, user).group_by(Station.name).order_by(func.count(Alarm.id).desc()).limit(5))
     return {
         "kpi": {"total_devices": total, "down_devices": down,
                 "uptime_pct": round((total - down) / total * 100, 2) if total else 100.0,
@@ -69,7 +70,9 @@ async def export_alarms_csv(db: AsyncSession = Depends(get_db),
             w.writerow([a.id, a.severity, a.status, _csv_safe(a.message), _csv_safe(d.hostname),
                         _csv_safe(s.name), a.first_seen.strftime("%Y-%m-%d %H:%M:%S")])
             if buf.tell() > 64_000:
-                yield buf.getvalue(); buf.seek(0); buf.truncate()
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate()
         yield buf.getvalue()
 
     name = f"nr_ims_alarms_{datetime.now(UTC):%Y%m%d}.csv"

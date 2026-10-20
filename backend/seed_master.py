@@ -1,17 +1,19 @@
 import asyncio
-from sqlalchemy import delete
-from datetime import datetime, timezone
 import uuid
-from app.db.session import async_session_maker
+from datetime import UTC, datetime
+
+from sqlalchemy import delete
+
 from app.config import Env, get_settings
+from app.db.session import async_session_maker
 
 if get_settings().env is Env.PRODUCTION:
     raise SystemExit("seed_master.py is disabled in production")
-from app.models.device import Device
 from app.models.alarm import Alarm
-from app.models.station import Station
-from app.models.link import Link
+from app.models.device import Device
 from app.models.device_link import DeviceLink
+from app.models.link import Link
+from app.models.station import Station
 
 PARENT = {  # child -> parent. Drives root-cause correlation.
     "LKO": "IRCA", "MB": "IRCA", "UMB": "IRCA", "NDLS": "IRCA", "FZR": "IRCA", "JAT": "IRCA",
@@ -43,7 +45,24 @@ STATIONS = [
 
 async def seed():
     async with async_session_maker() as db:
-        print("Clearing old data...")
+        # Safety guard (added post-audit): prevent accidental data loss.
+        # Only clear existing data if NRIMS_ALLOW_DESTRUCTIVE_SEED=true.
+        import os
+        from sqlalchemy import func, select
+
+        existing_stations = await db.scalar(select(func.count()).select_from(Station))
+        allow_destructive = os.getenv("NRIMS_ALLOW_DESTRUCTIVE_SEED", "false").lower() == "true"
+
+        if existing_stations and existing_stations > 0 and not allow_destructive:
+            print(f"Database already has {existing_stations} station(s) - skipping destructive seed.")
+            print("To force re-seed (DATA LOSS): NRIMS_ALLOW_DESTRUCTIVE_SEED=true make seed")
+            return
+
+        if existing_stations and existing_stations > 0 and allow_destructive:
+            print(f"NRIMS_ALLOW_DESTRUCTIVE_SEED=true -> clearing {existing_stations} station(s) and related data...")
+        else:
+            print("Empty database -> seeding fresh...")
+
         await db.execute(delete(Alarm))
         await db.execute(delete(DeviceLink))
         await db.execute(delete(Link))
@@ -58,14 +77,13 @@ async def seed():
         for code, parent in PARENT.items():
             (await db.get(Station, code)).parent_station_code = parent
         await db.flush()
-        for i, (code, name, div, tier) in enumerate(STATIONS):
-            
+        for i, (code, *_rest) in enumerate(STATIONS):
             # BSB और MB को जानबूझकर डाउन किया गया है
             r_status = "down" if code in ["BSB", "MB"] else "up"
             router = Device(
                 id=uuid.uuid4(), external_id=f"{code}-RTR", hostname=f"{code.lower()}-rtr", 
                 ip_address=f"10.10.{i}.1", category="router", status=r_status, 
-                station_code=code, source_system="simulator", source_timestamp=datetime.now(timezone.utc)
+                station_code=code, source_system="simulator", source_timestamp=datetime.now(UTC)
             )
             db.add(router)
             
@@ -74,7 +92,7 @@ async def seed():
                 db.add(Alarm(
                     id=uuid.uuid4(), external_id=f"alm-{code}", device_id=router.id, 
                     severity="critical", message=f"Router unreachable at {code}", 
-                    status="active", first_seen=datetime.now(timezone.utc), last_seen=datetime.now(timezone.utc)
+                    status="active", first_seen=datetime.now(UTC), last_seen=datetime.now(UTC)
                 ))
         await db.commit()
 

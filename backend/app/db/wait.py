@@ -24,7 +24,7 @@ from app.config import get_settings
 
 def _classify(host: str, port: int) -> str:
     try:
-        addrs = {a[4][0] for a in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)}
+        addrs = {str(a[4][0]) for a in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)}
     except socket.gaierror as exc:
         return f"DNS FAILED for '{host}' ({exc}). Service name in URL is wrong or not on this network."
     for addr in addrs:

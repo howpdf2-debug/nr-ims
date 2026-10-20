@@ -1,8 +1,17 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Index, String, DateTime, Uuid, func, ForeignKey, Float, Boolean, text
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.alarm import Alarm
+    from app.models.interface import Interface
+    from app.models.station import Station
+
 
 class Device(Base):
     __tablename__ = "devices"

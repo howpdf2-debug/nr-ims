@@ -1,8 +1,15 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Index, String, DateTime, ForeignKey, Uuid, func
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.device import Device
+
 
 class Alarm(Base):
     __tablename__ = "alarms"

@@ -1,0 +1,99 @@
+# NR-IMS production-style stack.   Usage:  make init && make up && make seed
+# Service names (db, cache) ARE the hostnames inside the Docker network - never use localhost.
+
+x-backend-env: &backend-env
+  NRIMS_ENV: ${NRIMS_ENV:-development}
+  NRIMS_DATA_PROVIDER: ${NRIMS_DATA_PROVIDER:-simulator}
+  NRIMS_LOG_LEVEL: ${NRIMS_LOG_LEVEL:-INFO}
+  NRIMS_IN_CONTAINER: "true"
+  # hex passwords only (openssl rand -hex 24): characters like @ : / # % break a URL.
+  NRIMS_DATABASE_URL: postgresql+asyncpg://nrims:${POSTGRES_PASSWORD:?run `make init` (creates .env)}@db:5432/nrims
+  NRIMS_VALKEY_URL: redis://:${VALKEY_PASSWORD:?run `make init` (creates .env)}@cache:6379/0
+  NRIMS_SECRET_KEY: ${NRIMS_SECRET_KEY:?run `make init` (creates .env)}
+  # Browser talks to nginx on the SAME origin, so CORS is not needed. Never use "*" with credentials.
+  NRIMS_CORS_ORIGINS: ${NRIMS_CORS_ORIGINS:-[]}
+  NRIMS_DOCS_ENABLED: ${NRIMS_DOCS_ENABLED:-true}
+  NRIMS_SEED_ADMIN_PASSWORD: ${NRIMS_SEED_ADMIN_PASSWORD:-}
+
+services:
+  db:
+    image: postgres:15-alpine          # keep 15: an existing postgres_data volume is not readable by 16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nrims
+      POSTGRES_DB: nrims
+      # Applied ONLY when the volume is first created. Existing volume + new password
+      # => "password authentication failed". Fix: `docker compose down -v` (dev) or ALTER USER.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run `make init` (creates .env)}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"   # was 0.0.0.0 -> exposed to the whole LAN
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U nrims -d nrims"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [backend]
+
+  cache:
+    image: valkey/valkey:7.2-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD}", "--save", "", "--appendonly", "no"]
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?run `make init` (creates .env)}
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:${VALKEY_HOST_PORT:-6379}:6379"   # loopback only (needed by `make test-integration`)
+    networks: [backend]
+
+  # One-shot: applies migrations, exits 0. Backend starts only after it succeeds.
+  migrate:
+    build: { context: ./backend }
+    image: nr-ims-backend:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    networks: [backend]
+
+  backend:
+    image: nr-ims-backend:local
+    pull_policy: never
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+      cache: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:8000:8000"           # direct API access for debugging only
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [backend, frontend]
+
+  frontend:
+    build: { context: ./frontend }
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }   # nginx resolves `backend` at start-up
+    ports:
+      - "${HTTP_PORT:-80}:8080"         # container listens on 8080 (non-root nginx)
+    networks: [frontend]
+
+networks:
+  backend: {}
+  frontend: {}
+
+volumes:
+  postgres_data:

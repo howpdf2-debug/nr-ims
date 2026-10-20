@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Index, String, ForeignKey, Uuid, Float, Integer, Boolean
+
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
+
 
 class Link(Base):
     __tablename__ = "links"

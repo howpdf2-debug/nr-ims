@@ -1,9 +1,10 @@
-from typing import AsyncGenerator
+import uuid
+from collections.abc import AsyncGenerator
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.security.tokens import decode_access_token
@@ -36,7 +37,7 @@ async def get_current_user(
     try:
         user_uuid = uuid.UUID(str(user_id))
     except ValueError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()

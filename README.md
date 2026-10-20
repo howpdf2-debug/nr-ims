@@ -14,9 +14,11 @@ Backend:
 
 Stack (Docker):
 
-    cp deploy/.env.example deploy/.env
-    make up
-    curl http://localhost:8000/readyz
+    make init            # .env with random secrets (also auto-run by make up)
+    make up              # build, migrate, start, wait until /readyz is 200
+    make seed            # master data, links, users
+    make creds           # dev login
+    make test-integration
 
 ## Phases
 
@@ -34,3 +36,11 @@ Stack (Docker):
 | 10 | P9 Release | pending |
 
 See `docs/` for architecture and ADRs.
+## Seed Safety (v3.2+)
+
+`make seed` is now idempotent and **will not delete existing data**.
+To force a destructive re-seed (dev only, DATA LOSS):
+
+    NRIMS_ALLOW_DESTRUCTIVE_SEED=true make seed
+
+This is a safety guard against accidental data loss. Never use in production.

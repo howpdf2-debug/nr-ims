@@ -1,7 +1,7 @@
 import uuid
 from enum import StrEnum
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,6 @@ from app.models.user import User
 from app.security.rbac import Permission, require_permission
 from app.security.scope import get_device_for_user, scope_stations
 from app.services.audit import record_audit
-from fastapi import Request
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 

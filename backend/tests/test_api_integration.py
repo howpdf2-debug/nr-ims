@@ -1,5 +1,5 @@
 """Needs a migrated+seeded DB and Valkey:  NRIMS_INTEGRATION=1 pytest tests/test_api_integration.py
-(seed_master.py, seed_links.py, seed_admin.py with NRIMS_SEED_ADMIN_PASSWORD=Str0ng-Test-Pass1)."""
+(seed_master.py, seed_links.py, seed_admin.py with NRIMS_SEED_ADMIN_PASSWORD=the password in NRIMS_SEED_ADMIN_PASSWORD)."""
 import os
 
 import httpx
@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.main import create_app
 
 pytestmark = pytest.mark.skipif(os.getenv("NRIMS_INTEGRATION") != "1", reason="integration")
-PW = "Str0ng-Test-Pass1"
+PW = os.getenv("NRIMS_SEED_ADMIN_PASSWORD", "Str0ng-Test-Pass1")
 
 
 @pytest_asyncio.fixture
@@ -79,9 +79,16 @@ async def test_rbac_and_validation(client):
 
 
 async def test_login_lockout(client):
-    for _ in range(5):
-        assert (await login(client, "dual@nr-ims.local", "wrong-wrong-1")).status_code == 401
-    assert (await login(client, "dual@nr-ims.local", "wrong-wrong-1")).status_code == 429
+    # Unknown user on purpose: never locks out a real account, and the counter is cleaned up.
+    email, key = "lockout-probe@nr-ims.local", "login_fail:lockout-probe@nr-ims.local:127.0.0.1"
+    cache = client._transport.app.state.cache
+    await cache.delete(key)
+    try:
+        for _ in range(5):
+            assert (await login(client, email, "wrong-wrong-1")).status_code == 401
+        assert (await login(client, email, "wrong-wrong-1")).status_code == 429
+    finally:
+        await cache.delete(key)
 
 
 async def test_csv_and_reports_scoped(client):

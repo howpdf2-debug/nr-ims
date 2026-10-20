@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import String, ForeignKey, Uuid
+
+from sqlalchemy import ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
+
 
 class DeviceLink(Base):
     __tablename__ = "device_links"

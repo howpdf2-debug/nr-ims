@@ -55,6 +55,7 @@ async def update_station(code: str, req: StationUpdate, db: AsyncSession = Depen
                          user: User = Depends(require_permission(Permission.STATION_MANAGE))):
     await require_station(db, user, code)
     st = await db.get(Station, code)
+    assert st is not None  # guaranteed by require_station
     st.name, st.tier, st.station_type = req.name, req.tier, req.station_type
     record_audit(db, user, "station.update", "station", code)
     await db.commit()

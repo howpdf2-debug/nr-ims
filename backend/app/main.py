@@ -5,7 +5,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.v1 import (
-    actions, alarms, audit, auth, dashboard, devices, discovery, links, reports, stations, topology, users,
+    actions,
+    alarms,
+    audit,
+    auth,
+    dashboard,
+    devices,
+    discovery,
+    links,
+    reports,
+    stations,
+    topology,
+    users,
 )
 from app.cache import build_cache
 from app.config import Settings, get_settings

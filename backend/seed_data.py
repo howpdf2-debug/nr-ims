@@ -1,18 +1,40 @@
 import asyncio
-from sqlalchemy import select, delete
-from datetime import datetime, timezone
 import uuid
-from app.db.session import async_session_maker
+from datetime import UTC, datetime
+
+from sqlalchemy import delete
+
 from app.config import Env, get_settings
+from app.db.session import async_session_maker
 
 if get_settings().env is Env.PRODUCTION:
     raise SystemExit("seed_data.py is disabled in production")
-from app.models.device import Device
 from app.models.alarm import Alarm
+from app.models.device import Device
 from app.models.station import Station
+
 
 async def seed():
     async with async_session_maker() as db:
+        # Safety guard (added post-audit): prevent accidental data loss.
+        # This legacy script is NOT called by `make seed` but is manually runnable.
+        # Only clear existing data if NRIMS_ALLOW_DESTRUCTIVE_SEED=true.
+        import os
+        from sqlalchemy import func, select
+
+        existing_stations = await db.scalar(select(func.count()).select_from(Station))
+        allow_destructive = os.getenv("NRIMS_ALLOW_DESTRUCTIVE_SEED", "false").lower() == "true"
+
+        if existing_stations and existing_stations > 0 and not allow_destructive:
+            print(f"Database already has {existing_stations} station(s) - skipping destructive seed.")
+            print("To force re-seed (DATA LOSS): NRIMS_ALLOW_DESTRUCTIVE_SEED=true python seed_data.py")
+            return
+
+        if existing_stations and existing_stations > 0 and allow_destructive:
+            print(f"NRIMS_ALLOW_DESTRUCTIVE_SEED=true -> clearing {existing_stations} station(s) and related data...")
+        else:
+            print("Empty database -> seeding fresh...")
+
         print("Clearing old data...")
         await db.execute(delete(Alarm))
         await db.execute(delete(Device))
@@ -71,7 +93,7 @@ async def seed():
                 status=d["status"], 
                 station_code=d["st"],
                 source_system="simulator", 
-                source_timestamp=datetime.now(timezone.utc)
+                source_timestamp=datetime.now(UTC)
             )
             db.add(dev)
             dev_objs.append(dev)
@@ -89,8 +111,8 @@ async def seed():
                     severity="critical" if d.category in ["server", "router"] else "major", 
                     message=f"{d.category.upper()} connectivity lost at {d.station_code}", 
                     status="active",
-                    first_seen=datetime.now(timezone.utc), 
-                    last_seen=datetime.now(timezone.utc)
+                    first_seen=datetime.now(UTC), 
+                    last_seen=datetime.now(UTC)
                 )
                 db.add(a)
         

@@ -1,8 +1,11 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Index, String, DateTime, ForeignKey, Uuid, func
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
+
 
 class RemoteAction(Base):
     __tablename__ = "remote_actions"

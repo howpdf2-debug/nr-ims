@@ -31,18 +31,18 @@ async def get_topology(db: AsyncSession = Depends(get_db),
                        user: User = Depends(require_permission(Permission.DEVICE_READ))):
     stations = (await db.execute(scope_stations(select(Station), user))).scalars().all()
     visible = {s.code for s in stations}
-    links = [l for l in (await db.execute(select(Link))).scalars().all()
-             if l.source_station in visible or l.destination_station in visible]  # no leaking foreign nodes
+    links = [lk for lk in (await db.execute(select(Link))).scalars().all()
+             if lk.source_station in visible or lk.destination_station in visible]  # no leaking foreign nodes
     return {
         "nodes": [{"id": s.code, "type": "customNode",
                    "data": {"label": s.name, "code": s.code, "tier": s.tier, "division": s.division},
                    "position": {"x": s.position_x or 0, "y": s.position_y or 0}} for s in stations],
-        "edges": [{"id": str(l.id), "source": l.source_station, "target": l.destination_station,
-                   "label": f"{l.provider} ({l.bandwidth_mbps}M)",
-                   "data": {"provider": l.provider, "status": l.status, "bandwidth": l.bandwidth_mbps,
-                            "latency": l.latency_ms, "packet_loss": l.packet_loss_pct,
-                            "crc": l.crc_errors, "is_admin_shutdown": l.is_admin_shutdown}}
-                  for l in links if l.source_station in visible and l.destination_station in visible],
+        "edges": [{"id": str(lk.id), "source": lk.source_station, "target": lk.destination_station,
+                   "label": f"{lk.provider} ({lk.bandwidth_mbps}M)",
+                   "data": {"provider": lk.provider, "status": lk.status, "bandwidth": lk.bandwidth_mbps,
+                            "latency": lk.latency_ms, "packet_loss": lk.packet_loss_pct,
+                            "crc": lk.crc_errors, "is_admin_shutdown": lk.is_admin_shutdown}}
+                  for lk in links if lk.source_station in visible and lk.destination_station in visible],
     }
 
 
@@ -68,6 +68,7 @@ async def save_station_position(station_code: str, pos: PositionUpdate, db: Asyn
                                 user: User = Depends(require_permission(Permission.DEVICE_WRITE))):
     await require_station(db, user, station_code)
     st = await db.get(Station, station_code)
+    assert st is not None  # guaranteed by require_station
     st.position_x, st.position_y = pos.x, pos.y
     await db.commit()
     return {"message": "Position saved"}

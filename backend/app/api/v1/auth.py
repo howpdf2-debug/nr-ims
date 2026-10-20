@@ -1,3 +1,5 @@
+import contextlib
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
@@ -33,19 +35,15 @@ async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
     # Always run one hash verification so timing does not reveal valid emails.
     ok = verify_password(form.password, user.hashed_password if user else DUMMY_HASH)
     if not user or not ok or not user.is_active:
-        try:
+        with contextlib.suppress(Exception):  # cache down must never block the 401 path
             await request.app.state.cache.incr(key)
             await request.app.state.cache.expire(key, s.login_lockout_seconds)
-        except Exception:  # noqa: BLE001
-            pass
         record_audit(db, user, "auth.login_failed", "user", form.username[:100], {"ip": ip})
         await db.commit()
         raise HTTPException(401, "Incorrect email or password", headers={"WWW-Authenticate": "Bearer"})
 
-    try:
+    with contextlib.suppress(Exception):
         await request.app.state.cache.delete(key)
-    except Exception:  # noqa: BLE001
-        pass
     record_audit(db, user, "auth.login", "user", str(user.id), {"ip": ip})
     await db.commit()
     return {"access_token": create_access_token(str(user.id), user.role, user.scopes or []),

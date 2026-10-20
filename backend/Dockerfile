@@ -17,12 +17,13 @@ WORKDIR /app
 
 # Dependencies first (cached until pyproject.toml changes).
 RUN pip install --upgrade pip "setuptools>=68" wheel
-COPY pyproject.toml ./
+COPY pyproject.toml constraints.txt ./
 RUN python - <<'PY' > /tmp/req.txt
 import tomllib
 print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]))
 PY
-RUN pip install -r /tmp/req.txt && rm /tmp/req.txt
+# constraints.txt pins every transitive version -> identical builds everywhere (`make lock` to refresh)
+RUN pip install -c constraints.txt -r /tmp/req.txt && rm /tmp/req.txt
 
 # Application + migrations + ops scripts (previously missing -> `alembic` could not run).
 COPY alembic.ini entrypoint.sh ./
@@ -30,7 +31,8 @@ COPY migrations ./migrations
 COPY app ./app
 COPY seed_admin.py seed_master.py seed_data.py seed_links.py simulate_fault.py ./
 
-RUN useradd --create-home --shell /usr/sbin/nologin nrims \
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+ && useradd --create-home --shell /usr/sbin/nologin nrims \
  && chmod +x /app/entrypoint.sh \
  && chown -R nrims:nrims /app
 USER nrims
