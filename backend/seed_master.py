@@ -1,13 +1,22 @@
 import asyncio
-from sqlalchemy import select, delete
+from sqlalchemy import delete
 from datetime import datetime, timezone
 import uuid
 from app.db.session import async_session_maker
+from app.config import Env, get_settings
+
+if get_settings().env is Env.PRODUCTION:
+    raise SystemExit("seed_master.py is disabled in production")
 from app.models.device import Device
 from app.models.alarm import Alarm
 from app.models.station import Station
 from app.models.link import Link
 from app.models.device_link import DeviceLink
+
+PARENT = {  # child -> parent. Drives root-cause correlation.
+    "LKO": "IRCA", "MB": "IRCA", "UMB": "IRCA", "NDLS": "IRCA", "FZR": "IRCA", "JAT": "IRCA",
+    "BSB": "LKO", "PRG": "LKO", "HW": "MB", "DDN": "UMB", "GZB": "NDLS", "LDH": "FZR", "JUC": "FZR",
+}
 
 STATIONS = [
     # Core Network
@@ -43,14 +52,19 @@ async def seed():
         await db.commit()
 
         print("Seeding Stations and Devices with Alarms...")
-        for code, name, div, tier in STATIONS:
+        for code, name, div, tier in STATIONS:  # parents first (FK), then children
             db.add(Station(code=code, name=name, division=div, tier=tier, station_type="PRS"))
+        await db.flush()
+        for code, parent in PARENT.items():
+            (await db.get(Station, code)).parent_station_code = parent
+        await db.flush()
+        for i, (code, name, div, tier) in enumerate(STATIONS):
             
             # BSB और MB को जानबूझकर डाउन किया गया है
             r_status = "down" if code in ["BSB", "MB"] else "up"
             router = Device(
                 id=uuid.uuid4(), external_id=f"{code}-RTR", hostname=f"{code.lower()}-rtr", 
-                ip_address=f"10.10.10.1", category="router", status=r_status, 
+                ip_address=f"10.10.{i}.1", category="router", status=r_status, 
                 station_code=code, source_system="simulator", source_timestamp=datetime.now(timezone.utc)
             )
             db.add(router)

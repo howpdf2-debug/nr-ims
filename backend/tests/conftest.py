@@ -1,5 +1,3 @@
-"""Shared test fixtures."""
-
 import pytest
 
 from app.config import DataProvider, Env, Settings

@@ -3,6 +3,10 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import select, update
 from app.db.session import async_session_maker
+from app.config import Env, get_settings
+
+if get_settings().env is Env.PRODUCTION:
+    raise SystemExit("simulate_fault.py is disabled in production")
 from app.models.device import Device
 from app.models.alarm import Alarm
 

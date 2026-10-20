@@ -1,65 +1,61 @@
 import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
-
 from alembic import context
+from sqlalchemy import pool, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import create_async_engine
 
+import app.models  # noqa: F401  (registers every model on Base.metadata)
 from app.config import get_settings
 from app.db.base import Base
-import app.models  # Ensures all models are loaded
+from app.db.session import asyncpg_connect_args
 
 config = context.config
-
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url.get_secret_value())
+# configparser treats '%' as interpolation -> escape it or passwords containing '%' crash.
+config.set_main_option("sqlalchemy.url", settings.database_url.get_secret_value().replace("%", "%%"))
 
 target_metadata = Base.metadata
+MIGRATION_LOCK_ID = 727274  # arbitrary constant; serialises concurrent `alembic upgrade`
 
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=settings.database_url.get_secret_value(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
-
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
+        # Safe with multiple replicas / CI jobs: the second runner waits, then no-ops.
+        connection.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": MIGRATION_LOCK_ID})
         context.run_migrations()
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    # Same URL + same asyncpg args as the application: one code path, one behaviour.
+    connectable = create_async_engine(
+        settings.database_url.get_secret_value(),
         poolclass=pool.NullPool,
+        connect_args=asyncpg_connect_args(settings),
     )
-
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
-
     await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_async_migrations())

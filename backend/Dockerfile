@@ -1,11 +1,13 @@
-FROM python:3.12-slim AS base
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=120 \
-    PIP_RETRIES=10
+    PIP_RETRIES=10 \
+    NRIMS_IN_CONTAINER=true
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tini \
@@ -13,19 +15,29 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Upgrade pip and pre-install build tooling BEFORE the package install,
-# so pip can use --no-build-isolation and avoid a second PyPI round-trip.
+# Dependencies first (cached until pyproject.toml changes).
 RUN pip install --upgrade pip "setuptools>=68" wheel
-
 COPY pyproject.toml ./
-RUN pip install --no-build-isolation .
+RUN python - <<'PY' > /tmp/req.txt
+import tomllib
+print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]))
+PY
+RUN pip install -r /tmp/req.txt && rm /tmp/req.txt
 
+# Application + migrations + ops scripts (previously missing -> `alembic` could not run).
+COPY alembic.ini entrypoint.sh ./
+COPY migrations ./migrations
 COPY app ./app
+COPY seed_admin.py seed_master.py seed_data.py seed_links.py simulate_fault.py ./
 
 RUN useradd --create-home --shell /usr/sbin/nologin nrims \
+ && chmod +x /app/entrypoint.sh \
  && chown -R nrims:nrims /app
 USER nrims
 
 EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]

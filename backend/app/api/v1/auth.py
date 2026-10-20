@@ -1,36 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db
 from app.models.user import User
-from app.security.passwords import verify_password
-from app.security.tokens import create_access_token
 from app.schemas.auth import Token
+from app.security.passwords import DUMMY_HASH, verify_password
+from app.security.tokens import create_access_token
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
+async def _attempts(request: Request, key: str) -> int:
+    try:
+        return int(await request.app.state.cache.get(key) or 0)
+    except Exception:  # noqa: BLE001  cache down -> fail open, never lock operators out
+        return 0
+
+
 @router.post("/login", response_model=Token)
-async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(User).where(User.email == form_data.username))
-    user = result.scalar_one_or_none()
+async def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
+                db: AsyncSession = Depends(get_db)):
+    s = request.app.state.settings
+    ip = request.client.host if request.client else "?"
+    key = f"login_fail:{form.username.lower()}:{ip}"
+    if await _attempts(request, key) >= s.login_max_attempts:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many attempts. Try later.")
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+    user = (await db.execute(select(User).where(User.email == form.username))).scalar_one_or_none()
+    # Always run one hash verification so timing does not reveal valid emails.
+    ok = verify_password(form.password, user.hashed_password if user else DUMMY_HASH)
+    if not user or not ok or not user.is_active:
+        try:
+            await request.app.state.cache.incr(key)
+            await request.app.state.cache.expire(key, s.login_lockout_seconds)
+        except Exception:  # noqa: BLE001
+            pass
+        record_audit(db, user, "auth.login_failed", "user", form.username[:100], {"ip": ip})
+        await db.commit()
+        raise HTTPException(401, "Incorrect email or password", headers={"WWW-Authenticate": "Bearer"})
 
-    access_token = create_access_token(
-        subject=str(user.id), 
-        role=user.role, 
-        scopes=user.scopes or []
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    try:
+        await request.app.state.cache.delete(key)
+    except Exception:  # noqa: BLE001
+        pass
+    record_audit(db, user, "auth.login", "user", str(user.id), {"ip": ip})
+    await db.commit()
+    return {"access_token": create_access_token(str(user.id), user.role, user.scopes or []),
+            "token_type": "bearer"}

@@ -2,11 +2,16 @@ import asyncio
 import uuid
 from sqlalchemy import delete
 from app.db.session import async_session_maker
+from app.config import Env, get_settings
+
+if get_settings().env is Env.PRODUCTION:
+    raise SystemExit("seed_links.py is disabled in production")
 from app.models.link import Link
 
 async def seed_links():
     async with async_session_maker() as db:
         # पुराने लिंक्स साफ करें
+        # requires seed_master.py first (stations must exist)
         await db.execute(delete(Link))
         await db.commit()
 
@@ -15,9 +20,6 @@ async def seed_links():
             ("LKO", "BSB", "OFC", 1000, "up"),
             ("LKO", "BSB", "BSNL", 10, "down"),  # BSNL डाउन है
             ("LKO", "MB", "RAILTEL", 100, "up"),
-            ("BSB", "KEH", "OFC", 1000, "up"),
-            ("BSB", "MOF", "OFC", 1000, "up"),
-            ("MB", "BE", "OFC", 1000, "up"),
             ("LKO", "PRG", "OFC", 1000, "up"),
         ]
 
@@ -25,7 +27,7 @@ async def seed_links():
             db.add(Link(
                 id=uuid.uuid4(), source_station=src, destination_station=dst,
                 provider=provider, bandwidth_mbps=bw, status=status,
-                utilization_pct=45.0, latency_ms=12.0
+                latency_ms=12.0
             ))
         
         await db.commit()

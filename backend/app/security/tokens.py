@@ -1,30 +1,29 @@
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import UTC, datetime, timedelta
+
 import jwt
+
 from app.config import get_settings
 
-settings = get_settings()
-
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 hours shift for NOC operators
+
 
 def create_access_token(subject: str, role: str, scopes: list[str]) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {
-        "exp": expire, 
-        "sub": str(subject),
-        "role": role,
-        "scopes": scopes
+    s = get_settings()
+    now = datetime.now(UTC)
+    claims = {
+        "sub": str(subject), "role": role, "scopes": scopes,
+        "iat": now, "exp": now + timedelta(minutes=s.access_token_expire_minutes),
+        "jti": uuid.uuid4().hex,
     }
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key.get_secret_value(), algorithm=ALGORITHM
-    )
-    return encoded_jwt
+    return jwt.encode(claims, s.secret_key.get_secret_value(), algorithm=ALGORITHM)
+
 
 def decode_access_token(token: str) -> dict | None:
     try:
-        decoded = jwt.decode(
-            token, settings.secret_key.get_secret_value(), algorithms=[ALGORITHM]
+        return jwt.decode(
+            token, get_settings().secret_key.get_secret_value(), algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub"]},
         )
-        return decoded
     except jwt.PyJWTError:
         return None

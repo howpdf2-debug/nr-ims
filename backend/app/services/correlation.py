@@ -1,13 +1,21 @@
-from typing import List
-from app.models.alarm import Alarm
+"""Root-cause correlation: an alarm is suppressed when any ancestor station is itself down."""
 
-def correlate_alarms(alarms: List[Alarm]) -> List[Alarm]:
-    """
-    सरल इवेंट कोरिलेशन: एक ही डिवाइस के कई अलार्म्स में से केवल सबसे गंभीर अलार्म को रखें।
-    """
-    correlated = {}
-    for alarm in alarms:
-        # यदि उस डिवाइस के लिए पहले से कोई अलार्म है, तो केवल अधिक गंभीर को रखें
-        if alarm.device_id not in correlated or alarm.severity == "critical":
-            correlated[alarm.device_id] = alarm
-    return list(correlated.values())
+from collections.abc import Iterable
+
+
+def find_root_cause(station_code: str, parent_of: dict[str, str | None],
+                    stations_with_active_alarms: set[str]) -> str | None:
+    """Walk up the station hierarchy; return the nearest-to-root ancestor that is alarming."""
+    seen: set[str] = {station_code}
+    cursor = parent_of.get(station_code)
+    root = None
+    while cursor and cursor not in seen:  # cycle-safe
+        if cursor in stations_with_active_alarms:
+            root = cursor
+        seen.add(cursor)
+        cursor = parent_of.get(cursor)
+    return root
+
+
+def build_parent_map(rows: Iterable[tuple[str, str | None]]) -> dict[str, str | None]:
+    return dict(rows)

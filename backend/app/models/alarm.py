@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, ForeignKey, Uuid, func
+from sqlalchemy import Index, String, DateTime, ForeignKey, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -31,3 +31,5 @@ class Alarm(Base):
 
     # Relationship
     device: Mapped["Device"] = relationship(back_populates="alarms")
+
+Index("ix_alarms_first_seen", Alarm.first_seen)

@@ -1,41 +1,78 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from typing import List
-from app.deps import get_db, get_current_user
+
+from app.deps import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserRead
+from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.security.passwords import hash_password
-from app.security.rbac import Permission, require_permission
+from app.security.rbac import Permission, Role, require_permission
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/users", tags=["users"])
+_manage = Depends(require_permission(Permission.USER_MANAGE))
 
-@router.get("/", response_model=List[UserRead])
-async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.USER_MANAGE))):
-    res = await db.execute(select(User))
-    return res.scalars().all()
 
-@router.post("/", response_model=UserRead)
-async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.USER_MANAGE))):
-    existing = await db.execute(select(User).where(User.email == user.email))
-    if existing.scalar_one_or_none(): raise HTTPException(400, "Email already exists")
-    
-    new_user = User(email=user.email, hashed_password=hash_password(user.password), role=user.role, scopes=user.scopes, is_active=True)
-    db.add(new_user); await db.commit(); await db.refresh(new_user)
-    return new_user
+async def _active_admins(db: AsyncSession) -> int:
+    return await db.scalar(select(func.count(User.id)).where(
+        User.role == Role.IRCA_ADMIN, User.is_active.is_(True))) or 0
+
+
+@router.get("/", response_model=list[UserRead])
+async def list_users(db: AsyncSession = Depends(get_db), _: User = _manage):
+    return (await db.execute(select(User).order_by(User.email))).scalars().all()
+
+
+@router.post("/", response_model=UserRead, status_code=201)
+async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db), me: User = _manage):
+    if (await db.execute(select(User).where(User.email == body.email))).scalar_one_or_none():
+        raise HTTPException(400, "Email already exists")
+    u = User(email=body.email, hashed_password=hash_password(body.password), role=body.role,
+             scopes=body.scopes, is_active=True)
+    db.add(u)
+    await db.flush()
+    record_audit(db, me, "user.create", "user", u.id, {"role": u.role, "scopes": u.scopes})
+    await db.commit()
+    await db.refresh(u)
+    return u
+
 
 @router.put("/{user_id}", response_model=UserRead)
-async def update_user(user_id: str, user: UserUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.USER_MANAGE))):
-    db_user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not db_user: raise HTTPException(404, "User not found")
-    
-    if user.role is not None: db_user.role = user.role
-    if user.scopes is not None: db_user.scopes = user.scopes
-    if user.is_active is not None: db_user.is_active = user.is_active
-    await db.commit(); return db_user
+async def update_user(user_id: uuid.UUID, body: UserUpdate, db: AsyncSession = Depends(get_db),
+                      me: User = _manage):
+    u = await db.get(User, user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    demoting = u.role == Role.IRCA_ADMIN and (
+        (body.role is not None and body.role != Role.IRCA_ADMIN) or body.is_active is False)
+    if demoting and await _active_admins(db) <= 1:
+        raise HTTPException(400, "Cannot remove the last active IRCA admin")
+    if body.role is not None:
+        u.role = body.role
+    if body.scopes is not None:
+        u.scopes = body.scopes
+    if body.is_active is not None:
+        u.is_active = body.is_active
+    if body.password:
+        u.hashed_password = hash_password(body.password)
+    record_audit(db, me, "user.update", "user", u.id,
+                 {k: v for k, v in body.model_dump(exclude_none=True).items() if k != "password"})
+    await db.commit()
+    return u
+
 
 @router.delete("/{user_id}")
-async def delete_user(user_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_permission(Permission.USER_MANAGE))):
-    if str(current_user.id) == user_id: raise HTTPException(400, "Cannot delete your own account")
-    await db.execute(delete(User).where(User.id == user_id)); await db.commit()
+async def delete_user(user_id: uuid.UUID, db: AsyncSession = Depends(get_db), me: User = _manage):
+    if me.id == user_id:
+        raise HTTPException(400, "Cannot delete your own account")
+    u = await db.get(User, user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    if u.role == Role.IRCA_ADMIN and u.is_active and await _active_admins(db) <= 1:
+        raise HTTPException(400, "Cannot delete the last active IRCA admin")
+    await db.delete(u)
+    record_audit(db, me, "user.delete", "user", user_id, {"email": u.email})
+    await db.commit()
     return {"message": "User deleted"}

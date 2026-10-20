@@ -1,42 +1,47 @@
+"""Idempotent dev seed for users. Never deletes existing users. Refuses to run in production.
+
+Password: NRIMS_SEED_ADMIN_PASSWORD, else a random one is generated and printed ONCE.
+"""
 import asyncio
-from sqlalchemy import select, delete
-from app.db.session import async_session_maker
+import secrets
+
+from sqlalchemy import select
+
+from app.config import Env, get_settings
+from app.db.session import async_session_maker, engine
 from app.models.user import User
 from app.security.passwords import hash_password
 
-async def create_users():
+USERS = [
+    ("irca@nr-ims.local", "irca_admin", ["*"]),
+    ("dual@nr-ims.local", "divisional_admin", ["LKO", "MB"]),
+    ("dli@nr-ims.local", "divisional_admin", ["DLI"]),
+    ("bsb@nr-ims.local", "tier1_incharge", ["BSB"]),
+]
+
+
+async def create_users() -> None:
+    s = get_settings()
+    if s.env is Env.PRODUCTION:
+        raise SystemExit("seed_admin.py is disabled in production")
+    configured = s.seed_admin_password.get_secret_value() if s.seed_admin_password else ""
+    password = configured or secrets.token_urlsafe(14)
+    created = 0
     async with async_session_maker() as db:
-        print("Clearing old users...")
-        await db.execute(delete(User))
+        for email, role, scopes in USERS:
+            existing = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if existing:
+                print(f"= exists: {email}")
+                continue
+            db.add(User(email=email, hashed_password=hash_password(password), role=role,
+                        scopes=scopes, is_active=True))
+            created += 1
         await db.commit()
+    print(f"Created {created} user(s).")
+    if created and not configured:
+        print(f"Generated password (shown once): {password}")
+    await engine.dispose()
 
-        # 1. IRCA Global Admin (देख सकता है सब कुछ)
-        irca = User(
-            email="irca@nr-ims.local", hashed_password=hash_password("Admin@123"),
-            role="irca_admin", scopes=["*"], is_active=True
-        )
-        
-        # 2. Dual Charge Admin (LKO + MB दोनों का एक्सेस)
-        dual_admin = User(
-            email="dual@nr-ims.local", hashed_password=hash_password("Admin@123"),
-            role="divisional_admin", scopes=["LKO", "MB"], is_active=True
-        )
-
-        # 3. Single Divisional Admin (सिर्फ DLI का एक्सेस)
-        dli_admin = User(
-            email="dli@nr-ims.local", hashed_password=hash_password("Admin@123"),
-            role="divisional_admin", scopes=["DLI"], is_active=True
-        )
-
-        # 4. Tier-1 Incharge (सिर्फ BSB और उसके चाइल्ड स्टेशन्स)
-        bsb_incharge = User(
-            email="bsb@nr-ims.local", hashed_password=hash_password("Admin@123"),
-            role="tier1_incharge", scopes=["BSB"], is_active=True
-        )
-
-        db.add_all([irca, dual_admin, dli_admin, bsb_incharge])
-        await db.commit()
-        print("✅ Admin users created: irca, dual (LKO+MB), dli, bsb")
 
 if __name__ == "__main__":
     asyncio.run(create_users())

@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey, Float
+from sqlalchemy import Index, String, ForeignKey, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -20,3 +20,5 @@ class Station(Base):
     position_y: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     devices: Mapped[list["Device"]] = relationship(back_populates="station", cascade="all, delete-orphan")
+
+Index("ix_stations_parent_station_code", Station.parent_station_code)

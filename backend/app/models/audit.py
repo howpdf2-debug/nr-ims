@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Uuid, func
+from sqlalchemy import Index, String, DateTime, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,3 +18,5 @@ class AuditEvent(Base):
     target_id: Mapped[str] = mapped_column(String(100))
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+Index("ix_audit_events_created_at", AuditEvent.created_at.desc())

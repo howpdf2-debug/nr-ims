@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Uuid, func, ForeignKey, Float, Boolean, text
+from sqlalchemy import Index, String, DateTime, Uuid, func, ForeignKey, Float, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -34,3 +34,5 @@ class Device(Base):
     children: Mapped[list["Device"]] = relationship("Device", back_populates="parent")
     parent: Mapped["Device | None"] = relationship("Device", back_populates="children", remote_side=[id])
     
+
+Index("ix_devices_status", Device.status)

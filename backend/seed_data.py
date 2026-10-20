@@ -3,6 +3,10 @@ from sqlalchemy import select, delete
 from datetime import datetime, timezone
 import uuid
 from app.db.session import async_session_maker
+from app.config import Env, get_settings
+
+if get_settings().env is Env.PRODUCTION:
+    raise SystemExit("seed_data.py is disabled in production")
 from app.models.device import Device
 from app.models.alarm import Alarm
 from app.models.station import Station

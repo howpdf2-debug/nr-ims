@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, ForeignKey, Uuid, Float, Integer, Boolean
+from sqlalchemy import Index, String, ForeignKey, Uuid, Float, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
@@ -19,3 +19,6 @@ class Link(Base):
     crc_errors: Mapped[int] = mapped_column(Integer, default=0)
     
     is_admin_shutdown: Mapped[bool] = mapped_column(Boolean, default=False)
+
+Index("ix_links_source_station", Link.source_station)
+Index("ix_links_destination_station", Link.destination_station)
