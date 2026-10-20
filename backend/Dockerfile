@@ -29,6 +29,7 @@ RUN pip install -c constraints.txt -r /tmp/req.txt && rm /tmp/req.txt
 COPY alembic.ini entrypoint.sh ./
 COPY migrations ./migrations
 COPY app ./app
+COPY arq_worker.py ./
 COPY seed_admin.py seed_master.py seed_data.py seed_links.py simulate_fault.py ./
 
 RUN sed -i 's/\r$//' /app/entrypoint.sh \

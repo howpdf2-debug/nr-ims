@@ -1,0 +1,36 @@
+# Phase 1 additions — auto-merged with docker-compose.yml by docker compose.
+# Remove this file to revert to Phase 0 stack.
+#
+# Note: *backend-env anchor is per-file scope, so env vars are duplicated here.
+
+services:
+  worker:
+    build: { context: ./backend }
+    image: nr-ims-backend:local
+    pull_policy: never
+    restart: unless-stopped
+    user: "0:0"                             # root — NET_RAW effective (Step 0.12)
+    environment:
+      NRIMS_ENV: ${NRIMS_ENV:-development}
+      NRIMS_DATA_PROVIDER: ${NRIMS_DATA_PROVIDER:-simulator}
+      NRIMS_LOG_LEVEL: ${NRIMS_LOG_LEVEL:-INFO}
+      NRIMS_IN_CONTAINER: "true"
+      NRIMS_DATABASE_URL: postgresql+asyncpg://nrims:${POSTGRES_PASSWORD:?run `make init`}@db:5432/nrims
+      NRIMS_VALKEY_URL: redis://:${VALKEY_PASSWORD:?run `make init`}@cache:6379/0
+      NRIMS_SECRET_KEY: ${NRIMS_SECRET_KEY:?run `make init`}
+      NRIMS_CORS_ORIGINS: ${NRIMS_CORS_ORIGINS:-[]}
+      NRIMS_DOCS_ENABLED: ${NRIMS_DOCS_ENABLED:-true}
+      NRIMS_SEED_ADMIN_PASSWORD: ${NRIMS_SEED_ADMIN_PASSWORD:-}
+    command: ["arq", "arq_worker.WorkerSettings"]
+    depends_on:
+      db:      { condition: service_healthy }
+      cache:   { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    networks: [backend]
+
+  snmpsim:
+    image: tandrup/snmpsim:latest
+    restart: unless-stopped
+    environment:
+      EXTRA_FLAGS: "--data-dir=/usr/local/snmpsim/data"
+    networks: [backend]
