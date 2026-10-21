@@ -172,7 +172,7 @@ async def snmp_probe(
         _walk_column(engine, auth, transport, ctx, oid) for oid in oid_strs
     ])
     merged: dict[int, dict[str, Any]] = {}
-    for col, rows in zip(columns, walks):
+    for col, rows in zip(columns, walks, strict=True):
         for idx, val in rows:
             merged.setdefault(idx, {"if_index": idx})[col] = _coerce(val)
     result.interfaces = [merged[k] for k in sorted(merged)]

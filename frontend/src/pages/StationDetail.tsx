@@ -8,7 +8,7 @@ import ReactFlow, {
 import type { Connection } from 'reactflow'; // <-- यहाँ import type किया गया है
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
-import { api } from "../lib/api";
+import { api, errorMessage } from "../lib/api";
 import StationNode from "../components/StationNode";
 import DeviceNode from "../components/DeviceNode";
 import { ArrowLeft, List, Network, X, Plus, Trash2, ShieldAlert, User, Server, Filter } from "lucide-react";
@@ -89,28 +89,54 @@ export default function StationDetail() {
     setIsVisualConnectModalOpen(true);
   }, [isAdminMode]);
 
-  const deviceMutation = useMutation({ mutationFn: (data: any) => api.post("/devices/", data), onSuccess: () => { setIsDeviceModalOpen(false); queryClient.invalidateQueries({ queryKey: ["localTopology", code] }); } });
-  const linkMutation = useMutation({ mutationFn: (data: any) => api.post("/topology/local/links", data), onSuccess: () => { setIsVisualConnectModalOpen(false); queryClient.invalidateQueries({ queryKey: ["localTopology", code] }); } });
+  const refreshStation = () => {
+    queryClient.invalidateQueries({ queryKey: ["localTopology", code] });
+    queryClient.invalidateQueries({ queryKey: ["stationDevices", code] });
+    queryClient.invalidateQueries({ queryKey: ["dashboardSummary"] });
+  };
+
+  const deviceMutation = useMutation({
+    mutationFn: (data: any) => api.post("/devices/", data),
+    onSuccess: () => { setIsDeviceModalOpen(false); setDeviceData({ hostname: "", ip_address: "", category: "switch", parent_device_id: "" }); refreshStation(); },
+    onError: (err: unknown) => alert(errorMessage(err, "Could not add device")),
+  });
+  const linkMutation = useMutation({
+    mutationFn: (data: any) => api.post("/topology/local/links", data),
+    onSuccess: () => { setIsVisualConnectModalOpen(false); refreshStation(); },
+    onError: (err: unknown) => alert(errorMessage(err, "Could not connect devices")),
+  });
 
   const deleteDevice = async (id: string) => {
     if(window.confirm("Delete this device permanently? (All connected links will also be deleted)")) {
-      await api.delete(`/devices/${id}`);
-      queryClient.invalidateQueries({ queryKey: ["localTopology", code] });
-      setSelectedNode(null);
+      try {
+        await api.delete(`/devices/${id}`);
+        refreshStation();
+        setSelectedNode(null);
+      } catch (err: unknown) {
+        alert(errorMessage(err, "Could not delete device"));
+      }
     }
   };
 
   const deleteLink = async (id: string) => {
     if(window.confirm("Delete this link permanently?")) {
-      await api.delete(`/topology/local/links/${id}`);
-      queryClient.invalidateQueries({ queryKey: ["localTopology", code] });
-      setSelectedEdge(null);
+      try {
+        await api.delete(`/topology/local/links/${id}`);
+        refreshStation();
+        setSelectedEdge(null);
+      } catch (err: unknown) {
+        alert(errorMessage(err, "Could not delete link"));
+      }
     }
   };
 
   const onNodeDragStop = useCallback(async (_event: any, node: any) => {
     if(!isAdminMode) return;
-    await api.put(`/topology/local/device/${node.id}/position`, { x: node.position.x, y: node.position.y });
+    try {
+      await api.put(`/topology/local/device/${node.id}/position`, { x: node.position.x, y: node.position.y });
+    } catch (err: unknown) {
+      console.warn("Could not save node position:", errorMessage(err));  // non-blocking: layout is cosmetic
+    }
   }, [isAdminMode]);
 
   const onNodeClick = useCallback((_event: any, node: any) => { setSelectedNode(node); setSelectedEdge(null); }, []);

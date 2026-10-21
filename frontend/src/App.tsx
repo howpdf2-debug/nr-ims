@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import AppShell from "./components/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RouteErrorBoundary from "./components/ErrorBoundary";
 
 // ── Lazy Loading All Pages (Splitting into separate chunks) ──
 const Login = lazy(() => import("./pages/Login"));
@@ -41,6 +42,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <RouteErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Login />} />
@@ -69,6 +71,7 @@ function App() {
             </Route>
           </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   );

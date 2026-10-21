@@ -103,6 +103,9 @@ async def run_scan(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(503, f"failed to enqueue: {exc}") from exc
 
+    if job is None:  # arq returns None when a job with the same id already exists
+        raise HTTPException(409, "A scan with this job id is already queued")
+
     record_audit(db, user, "discovery.scan", "discovery", job.job_id)
     await db.commit()
     return {"message": "Scan queued", "mode": "live", "job_id": job.job_id}

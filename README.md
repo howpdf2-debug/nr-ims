@@ -1,16 +1,12 @@
 # NR-IMS — Northern Railway Integrated Network Management System
 
 NOC application for monitoring approved railway network infrastructure.
-Status: **Phase P0 (Foundation) — early development, not for operational use.**
 
-## Quick start (local)
+**Status:** Phase 1 (API/UI contract repair) is complete; the project is being taken to a production-grade,
+upgrade-safe release in numbered phases. Live progress, the open gap register and the roadmap are in
+[`docs/PHASE_PROGRESS.md`](docs/PHASE_PROGRESS.md) (single source of truth). Not yet for operational use.
 
-Backend:
-
-    python3 -m venv .venv
-    source .venv/bin/activate
-    make install
-    make ci
+## Quick start
 
 Stack (Docker):
 
@@ -20,27 +16,39 @@ Stack (Docker):
     make creds           # dev login
     make test-integration
 
-## Phases
+Backend only (`make install` creates `.venv` by itself; do not create it by hand):
 
-| Day | Phase | Status |
-| :--- | :--- | :--- |
-| 1 | P0 Foundation | in progress |
-| 2 | P1 Data + Audit | pending |
-| 3 | P2 Auth + RBAC | pending |
-| 4 | P3 Core APIs | pending |
-| 5 | P4 Integrations | pending |
-| 6 | P5 Frontend shell | pending |
-| 7 | P6 Main screens | pending |
-| 8 | P7 Incidents, Topology, Live | pending |
-| 9 | P8 Hardening | pending |
-| 10 | P9 Release | pending |
+    make install         # python3.12 venv + pinned dependencies (backend/constraints.txt)
+                         # Debian/Ubuntu/Codespaces may first need: sudo apt-get install -y python3.12-venv
+    make ci              # guards + ruff + mypy + unit tests
 
-See `docs/` for architecture and ADRs.
-## Seed Safety (v3.2+)
+GitHub Codespaces: `make up` automatically applies the Docker-in-Docker network fix
+(`make fix-network`). If a start still fails with `TCP TIMEOUT ... packets dropped`, run
+`make fix-network && make down && make up`. The fix is not persistent across Codespace restarts.
 
-`make seed` is now idempotent and **will not delete existing data**.
+Frontend: `make frontend-ci` (lint, typecheck, build).
+
+## Quality gates (also run by `.github/workflows/ci.yml`)
+
+| Gate | Command |
+| :--- | :--- |
+| Repo guards, ruff, mypy, unit tests | `make ci` |
+| Migrations: upgrade from empty DB + model drift | `NRIMS_DATABASE_URL=<empty scratch db> make migrations-check` |
+| Integration tests (needs `make up && make seed`) | `make test-integration` |
+| Frontend | `make frontend-ci` |
+
+## Migrations policy
+
+Migrations are **forward-only** (expand/contract). Never edit an applied revision: add a new one.
+`alembic downgrade` is not a supported path (see gap G-13). Take a backup before migrating production.
+
+## Seed safety (v3.2+)
+
+`make seed` is idempotent and **will not delete existing data**.
+It loads divisions/stations/routers, inter-station links, a demo device inventory (switches, counters,
+TS, BTS, modems + device links + interfaces) and the dev users.
 To force a destructive re-seed (dev only, DATA LOSS):
 
     NRIMS_ALLOW_DESTRUCTIVE_SEED=true make seed
 
-This is a safety guard against accidental data loss. Never use in production.
+Never use in production.

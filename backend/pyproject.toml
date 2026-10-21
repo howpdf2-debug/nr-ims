@@ -55,11 +55,16 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC", "SIM"]
 ignore = ["S101", "B008"]   # B008: FastAPI Depends() in defaults is the idiom
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106"]
+"tests/*" = ["S105", "S106", "E501"]
+# SNMP v2c is the Phase-1 protocol; v3 is tracked as gap G-12. `timeout` is a protocol argument
+# forwarded to the network library, not an asyncio timeout (ASYNC109 false positive).
+"app/services/snmp.py" = ["S508", "ASYNC109"]
+"app/services/ping.py" = ["ASYNC109"]
 "app/models/*" = ["F821"]   # string forward refs in Mapped["Model"] relationships
-"seed_*.py" = ["E501", "S311"]
+"seed_*.py" = ["E501", "S311", "I001"]  # dev-only scripts; rewritten in Phase 6
 "simulate_fault.py" = ["E501"]
-"migrations/*" = ["E501"]
+# Applied migrations are immutable history: never restyle them (revision identity / upgrade safety).
+"migrations/versions/*" = ["E501", "UP", "I"]
 
 [tool.mypy]
 python_version = "3.12"

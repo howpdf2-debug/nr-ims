@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (guards, ruff, mypy, unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/constraints.txt
+      - name: Install (pinned by constraints.txt, same as the Docker image)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -c backend/constraints.txt -e "backend[dev]"
+      - name: Repo guards
+        run: |
+          python scripts/check_forbidden.py
+          python scripts/check_secrets_placeholders.py
+      - name: Ruff
+        run: ruff check backend
+      - name: Mypy
+        working-directory: backend
+        run: mypy app
+      - name: Unit tests (integration tests skip without NRIMS_INTEGRATION=1)
+        working-directory: backend
+        run: pytest -q
+
+  migrations:
+    name: migrations (upgrade from empty + drift check)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: nrims
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: nrims
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U nrims -d nrims"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NRIMS_ENV: test
+      NRIMS_DATABASE_URL: postgresql+asyncpg://nrims:ci-only-password@127.0.0.1:5432/nrims
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/constraints.txt
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -c backend/constraints.txt -e "backend[dev]"
+      - run: bash scripts/check_migrations.sh
+
+  frontend:
+    name: frontend (lint, typecheck, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build

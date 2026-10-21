@@ -4,9 +4,14 @@ FRONTEND := frontend
 VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
+# The project is pinned/tested on Python 3.12 (backend/constraints.txt). Prefer it when present.
+PYTHON ?= $(shell command -v python3.12 2>/dev/null || command -v python3)
+# "Installed" is tracked by OUR OWN stamp. (It used to be .venv/bin/activate, which `python3 -m venv`
+# itself creates - so a hand-made venv made `make install` silently do nothing and ruff/pytest were missing.)
+STAMP := $(VENV)/.nrims-installed
 
 
-.PHONY: diag init creds reset test-integration lock migrate seed db-doctor help install lint type test guards ci audit sbom \
+.PHONY: diag init creds reset test-integration lock migrate migrations-check seed db-doctor help install lint type test guards ci audit sbom \
         up down logs ps clean \
         frontend-install frontend-ci frontend-dev dev-backend
 
@@ -16,13 +21,26 @@ help:
 	@echo "Frontend: frontend-install frontend-ci frontend-dev"
 
 # ---------- Backend ----------
-$(VENV)/bin/activate: $(BACKEND)/pyproject.toml
-	python3 -m venv $(VENV)
+$(STAMP): $(BACKEND)/pyproject.toml $(BACKEND)/constraints.txt
+	@# A venv is usable only if pip exists. A failed `python -m venv` (missing python3.X-venv package) leaves a
+	@# half-made .venv (python symlink, no pip): discard it and recreate, with a clear hint if that fails again.
+	@if [ ! -x $(PIP) ]; then \
+	  rm -rf $(VENV); \
+	  $(PYTHON) -m venv $(VENV) || { rm -rf $(VENV); \
+	    echo; echo "ERROR: could not create a virtualenv with '$(PYTHON)'."; \
+	    echo "  Debian/Ubuntu/Codespaces:  sudo apt-get install -y python3.12-venv   (then run make again)"; \
+	    echo "  Or use another interpreter: make install PYTHON=python3"; exit 1; }; \
+	fi
 	$(PIP) install --upgrade pip
-	$(PIP) install -e "$(BACKEND)[dev]"
-	@touch $(VENV)/bin/activate
+	@if $(PY) -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)'; then \
+	  $(PIP) install -c $(BACKEND)/constraints.txt -e "$(BACKEND)[dev]"; \
+	else \
+	  echo "WARNING: $$($(PY) -V) is not Python 3.12 (pinned/tested version): installing UNPINNED dependencies"; \
+	  $(PIP) install -e "$(BACKEND)[dev]"; \
+	fi
+	@touch $(STAMP)
 
-install: $(VENV)/bin/activate
+install: $(STAMP)
 
 lint: install
 	$(VENV)/bin/ruff check $(BACKEND)
@@ -51,7 +69,11 @@ dev-backend: install
 
 # ---------- Stack ----------
 up: .env
-	@docker compose up -d --build || { echo; echo '=== START FAILED. migrate/db logs: ==='; docker compose ps -a; docker compose logs migrate db --tail=60; exit 1; }
+	@# Codespaces/Docker-in-Docker: stale iptables-legacy FORWARD DROP silently drops container-to-container
+	@# traffic ("[db-wait] TCP TIMEOUT ... packets dropped"). The script is idempotent and a no-op elsewhere.
+	@if [ "$$CODESPACES" = "true" ]; then bash scripts/fix_legacy_forward.sh || true; fi
+	@docker compose up -d --build || { echo; echo '=== START FAILED. migrate/db logs: ==='; docker compose ps -a; docker compose logs migrate db --tail=60; \
+	  echo; echo "HINT: on 'TCP TIMEOUT ... packets dropped' (Codespaces): make fix-network && make down && make up"; exit 1; }
 	bash scripts/wait_ready.sh
 
 down:
@@ -83,8 +105,12 @@ frontend-ci: frontend-install
 migrate:
 	docker compose run --rm migrate
 
+# Needs an EMPTY throwaway DB: NRIMS_DATABASE_URL=postgresql+asyncpg://u:p@127.0.0.1:5432/scratch make migrations-check
+migrations-check: install
+	ALEMBIC=$(CURDIR)/$(VENV)/bin/alembic bash scripts/check_migrations.sh
+
 seed: .env
-	docker compose exec backend python seed_master.py && docker compose exec backend python seed_links.py && docker compose exec backend python seed_admin.py
+	docker compose exec backend python seed_master.py && docker compose exec backend python seed_links.py && docker compose exec backend python seed_inventory.py && docker compose exec backend python seed_admin.py
 
 db-doctor:
 	docker compose run --rm --no-deps migrate python -m app.db.wait --diagnose

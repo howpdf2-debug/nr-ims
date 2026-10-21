@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db
+from app.models.alarm import Alarm
 from app.models.device import Device
 from app.models.station import Station
 from app.models.user import User
@@ -11,6 +12,25 @@ from app.security.scope import scope_stations
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 _down = func.count(Device.id).filter(Device.status == "down")
+
+
+@router.get("/summary")
+async def get_summary(db: AsyncSession = Depends(get_db),
+                      user: User = Depends(require_permission(Permission.DEVICE_READ))):
+    """Scoped fleet KPIs computed in SQL (never from a paginated list)."""
+    dq = (select(func.count(Device.id).label("total"), _down.label("down"),
+                 func.count(Device.id).filter(Device.is_maintenance.is_(True)).label("maintenance"))
+          .select_from(Device).join(Station, Device.station_code == Station.code))
+    row = (await db.execute(scope_stations(dq, user))).one()
+    stations = await db.scalar(scope_stations(select(func.count(Station.code)), user)) or 0
+    aq = (select(func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
+          .join(Station, Device.station_code == Station.code).where(Alarm.status == "active"))
+    active_alarms = await db.scalar(scope_stations(aq, user)) or 0
+    return {
+        "total_devices": row.total, "down_devices": row.down, "maintenance_devices": row.maintenance,
+        "total_stations": stations, "active_alarms": active_alarms,
+        "availability_pct": round((row.total - row.down) / row.total * 100, 2) if row.total else None,
+    }
 
 
 @router.get("/divisions")

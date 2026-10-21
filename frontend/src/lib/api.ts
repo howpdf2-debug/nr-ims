@@ -21,3 +21,20 @@ api.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+
+/**
+ * Human-readable message from a failed request.
+ * Handles FastAPI `detail` as a string (HTTPException) or a list (422 validation errors).
+ */
+export function errorMessage(err: unknown, fallback = "Request failed"): string {
+  if (axios.isAxiosError(err)) {
+    if (!err.response) return "Cannot reach the server. Check your connection and try again.";
+    const detail = err.response.data?.detail;
+    if (typeof detail === "string" && detail) return detail;
+    if (Array.isArray(detail)) {
+      const msgs = detail.map((d: { msg?: string }) => d?.msg).filter(Boolean);
+      if (msgs.length) return msgs.join("; ");
+    }
+  }
+  return fallback;
+}

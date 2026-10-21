@@ -138,7 +138,7 @@ async def discover(
 
     probes = await _probe_snmp(probe_targets, community, snmp_port)
     snmp_hits = sum(1 for _, s in probes if s and s.reachable)
-    snmp_errors = sum(1 for _, s in probes if s is None or (s and s.error))
+    snmp_errors = sum(1 for _, s in probes if s is None or bool(s.error))
     log.info("discover: %d/%d SNMP responded (%d errors)",
              snmp_hits, len(probe_targets), snmp_errors)
 

@@ -18,10 +18,7 @@ if config.config_file_name is not None:
 settings = get_settings()
 # configparser treats '%' as interpolation -> escape it or passwords containing '%' crash.
 config.set_main_option("sqlalchemy.url", settings.database_url.get_secret_value().replace("%", "%%"))
-# CRITICAL: import all models so Base.metadata sees them before autogenerate
-
-import app.models  # noqa: F401
-
+# `import app.models` at the top registers every model on Base.metadata (needed by autogenerate).
 target_metadata = Base.metadata
 MIGRATION_LOCK_ID = 727274  # arbitrary constant; serialises concurrent `alembic upgrade`
 

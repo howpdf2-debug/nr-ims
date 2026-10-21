@@ -16,6 +16,7 @@ from app.api.v1 import (
     reports,
     stations,
     topology,
+    topology_local,
     users,
 )
 from app.cache import build_cache
@@ -23,7 +24,8 @@ from app.config import Settings, get_settings
 from app.db.session import build_engine, build_sessionmaker
 from app.logging_config import configure_logging
 
-_V1 = (auth, devices, alarms, dashboard, actions, stations, links, topology, audit, discovery, users, reports)
+_V1 = (auth, devices, alarms, dashboard, actions, stations, links, topology, topology_local, audit, discovery,
+       users, reports)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -61,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["X-Total-Count"],
     )
 
     app.include_router(health_router)

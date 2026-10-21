@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Building2, Server, AlertTriangle, ShieldCheck, Activity, ArrowRight, Network } from "lucide-react";
+import { Building2, Server, AlertTriangle, ShieldCheck, Wrench, ArrowRight, Network } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
@@ -12,11 +12,17 @@ export default function Dashboard() {
     refetchInterval: 30000,
   });
 
-  const { data: devices = [] } = useQuery({ queryKey: ["allDevices"], queryFn: () => api.get("/devices/").then(res => res.data) });
-  const { data: alarms = [] } = useQuery({ queryKey: ["activeAlarms"], queryFn: () => api.get("/alarms/").then(res => res.data), refetchInterval: 15000 });
+  // KPIs are computed server-side in SQL (never from a paginated list, which was capped at 100 rows).
+  const { data: summary } = useQuery({
+    queryKey: ["dashboardSummary"],
+    queryFn: () => api.get("/dashboard/summary").then(res => res.data),
+    refetchInterval: 15000,
+  });
 
-  const totalDevices = devices.length;
-  const activeAlarms = alarms.length;
+  const totalDevices = summary?.total_devices ?? "—";
+  const activeAlarms = summary?.active_alarms ?? "—";
+  const availability = summary?.availability_pct == null ? "—" : `${summary.availability_pct}%`;
+  const inMaintenance = summary?.maintenance_devices ?? "—";
   
   const ircaDiv = divisions.find((d: any) => d.division === "IRCA");
   const otherDivisions = divisions.filter((d: any) => d.division !== "IRCA");
@@ -36,12 +42,12 @@ export default function Dashboard() {
         
         <div className="kpi-card">
           <div className="kpi-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-green)' }}><ShieldCheck size={24} /></div>
-          <div><div className="kpi-value">98.5%</div><div className="kpi-label">Compliance</div></div>
+          <div><div className="kpi-value">{availability}</div><div className="kpi-label">Device Availability</div></div>
         </div>
         
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-amber)' }}><Activity size={24} /></div>
-          <div><div className="kpi-value">45%</div><div className="kpi-label">Traffic</div></div>
+          <div className="kpi-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: 'var(--accent-amber)' }}><Wrench size={24} /></div>
+          <div><div className="kpi-value">{inMaintenance}</div><div className="kpi-label">In Maintenance</div></div>
         </div>
       </div>
 

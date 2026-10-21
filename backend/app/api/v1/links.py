@@ -1,3 +1,6 @@
+"""Inter-station links. A link is visible only when BOTH of its stations are in the caller's scope
+(same rule as /topology/), so a boundary link never reveals a foreign station code."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
@@ -7,8 +10,9 @@ from app.deps import get_db
 from app.models.link import Link
 from app.models.station import Station
 from app.models.user import User
+from app.schemas.link import LinkRead
 from app.security.rbac import Permission, require_permission
-from app.security.scope import require_station, scope_stations
+from app.security.scope import is_unrestricted, require_station, scope_stations
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/links", tags=["links"])
@@ -25,12 +29,14 @@ async def _visible_codes(db: AsyncSession, user: User) -> set[str]:
     return set((await db.execute(scope_stations(select(Station.code), user))).scalars())
 
 
-@router.get("/")
+@router.get("/", response_model=list[LinkRead])
 async def get_all_links(db: AsyncSession = Depends(get_db),
                         user: User = Depends(require_permission(Permission.DEVICE_READ))):
-    vis = await _visible_codes(db, user)
-    links = (await db.execute(select(Link))).scalars().all()
-    return [lk for lk in links if lk.source_station in vis or lk.destination_station in vis]
+    q = select(Link).order_by(Link.source_station, Link.destination_station, Link.provider, Link.id)
+    if not is_unrestricted(user):
+        vis = await _visible_codes(db, user)
+        q = q.where(Link.source_station.in_(vis), Link.destination_station.in_(vis))
+    return (await db.execute(q)).scalars().all()
 
 
 @router.post("/", status_code=201)
@@ -49,9 +55,12 @@ async def create_link(req: LinkCreate, db: AsyncSession = Depends(get_db),
     return {"message": "Link created"}
 
 
-@router.get("/{station_code}")
+@router.get("/{station_code}", response_model=list[LinkRead])
 async def get_station_links(station_code: str, db: AsyncSession = Depends(get_db),
                             user: User = Depends(require_permission(Permission.DEVICE_READ))):
     await require_station(db, user, station_code)
     q = select(Link).where(or_(Link.source_station == station_code, Link.destination_station == station_code))
-    return (await db.execute(q)).scalars().all()
+    if not is_unrestricted(user):
+        vis = await _visible_codes(db, user)
+        q = q.where(Link.source_station.in_(vis), Link.destination_station.in_(vis))
+    return (await db.execute(q.order_by(Link.provider, Link.id))).scalars().all()
