@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAlarmsQuery } from "../hooks/useAlarmsQuery";
+import type { Alarm } from "../lib/alarms";
 import { useAlarmSound } from "../hooks/useAlarmSound";
 import {
   Maximize,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 
 export default function Wallboard() {
-  const { data: alarms = [], isLoading, isError } = useAlarmsQuery();
+  const { data: alarms = [], isLoading, isError } = useAlarmsQuery("active"); // wallboard = needs attention NOW
   const { isMuted, toggleMute, isAudioLocked } = useAlarmSound();
 
   const [time, setTime] = useState(new Date());
@@ -42,7 +43,7 @@ export default function Wallboard() {
 
   // ── Filter ONLY Critical/Major Active Alarms ──
   const criticalAlarms = alarms.filter(
-    (a: any) =>
+    (a: Alarm) =>
       a.status === "active" &&
       !a.is_suppressed &&
       (a.severity === "critical" || a.severity === "major")

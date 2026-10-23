@@ -20,7 +20,9 @@ export default function Dashboard() {
   });
 
   const totalDevices = summary?.total_devices ?? "—";
-  const activeAlarms = summary?.active_alarms ?? "—";
+  // "Open" = active + acknowledged: same definition as the Alarm Center default view (acknowledging does not clear a fault).
+  const openAlarms = summary?.open_alarms ?? "—";
+  const unacknowledged = summary?.active_alarms;
   const availability = summary?.availability_pct == null ? "—" : `${summary.availability_pct}%`;
   const inMaintenance = summary?.maintenance_devices ?? "—";
   
@@ -35,9 +37,13 @@ export default function Dashboard() {
           <div><div className="kpi-value">{totalDevices}</div><div className="kpi-label">Total Devices</div></div>
         </div>
         
-        <div className="kpi-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/actions')}>
+        <div className="kpi-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/alarms')}>
           <div className="kpi-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)' }}><AlertTriangle size={24} /></div>
-          <div><div className="kpi-value">{activeAlarms}</div><div className="kpi-label">Active Incidents</div></div>
+          <div>
+            <div className="kpi-value">{openAlarms}</div>
+            <div className="kpi-label">Open Incidents</div>
+            {unacknowledged != null && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{unacknowledged} unacknowledged</div>}
+          </div>
         </div>
         
         <div className="kpi-card">

@@ -23,12 +23,16 @@ async def get_summary(db: AsyncSession = Depends(get_db),
           .select_from(Device).join(Station, Device.station_code == Station.code))
     row = (await db.execute(scope_stations(dq, user))).one()
     stations = await db.scalar(scope_stations(select(func.count(Station.code)), user)) or 0
-    aq = (select(func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
-          .join(Station, Device.station_code == Station.code).where(Alarm.status == "active"))
-    active_alarms = await db.scalar(scope_stations(aq, user)) or 0
+    aq = (select(Alarm.status, func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
+          .join(Station, Device.station_code == Station.code).group_by(Alarm.status))
+    by_status = dict((await db.execute(scope_stations(aq, user))).all())
+    active_alarms = by_status.get("active", 0)  # unacknowledged
+    acknowledged_alarms = by_status.get("acknowledged", 0)
     return {
         "total_devices": row.total, "down_devices": row.down, "maintenance_devices": row.maintenance,
         "total_stations": stations, "active_alarms": active_alarms,
+        # "open" = the fault is still there (acknowledging does not clear it); matches GET /alarms/ default.
+        "acknowledged_alarms": acknowledged_alarms, "open_alarms": active_alarms + acknowledged_alarms,
         "availability_pct": round((row.total - row.down) / row.total * 100, 2) if row.total else None,
     }
 

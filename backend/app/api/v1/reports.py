@@ -19,6 +19,10 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 _EXPORT_LIMIT = 50_000
 
 
+def _ts(value: datetime | None) -> str:
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+
 def _csv_safe(v: object) -> str:
     """Neutralise spreadsheet formula injection (=,+,-,@ at start of a cell)."""
     s = str(v)
@@ -36,8 +40,11 @@ async def get_report_summary(db: AsyncSession = Depends(get_db),
         return scope_stations(select(func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
                               .join(Station, Device.station_code == Station.code), user)
 
-    total_alarms = await db.scalar(alarms()) or 0
-    active = await db.scalar(alarms().where(Alarm.status == "active")) or 0
+    by_status = dict((await db.execute(alarms().with_only_columns(Alarm.status, func.count(Alarm.id))
+                                       .group_by(Alarm.status))).all())
+    active, acknowledged = by_status.get("active", 0), by_status.get("acknowledged", 0)
+    resolved = by_status.get("resolved", 0)
+    total_alarms = sum(by_status.values())
 
     sev_q = scope_stations(select(Alarm.severity, func.count(Alarm.id)).join(Device, Alarm.device_id == Device.id)
                            .join(Station, Device.station_code == Station.code), user).group_by(Alarm.severity)
@@ -48,7 +55,10 @@ async def get_report_summary(db: AsyncSession = Depends(get_db),
     return {
         "kpi": {"total_devices": total, "down_devices": down,
                 "uptime_pct": round((total - down) / total * 100, 2) if total else 100.0,
-                "total_alarms": total_alarms, "active_alarms": active},
+                "total_alarms": total_alarms, "active_alarms": active,
+                # lifecycle breakdown (Phase 2f): "open" = active + acknowledged = fault still present
+                "acknowledged_alarms": acknowledged, "open_alarms": active + acknowledged,
+                "resolved_alarms": resolved},
         "severity_distribution": [{"name": r[0].capitalize(), "value": r[1]} for r in (await db.execute(sev_q)).all()],
         "top_stations": [{"name": r[0], "count": r[1]} for r in (await db.execute(top_q)).all()],
     }
@@ -65,10 +75,15 @@ async def export_alarms_csv(db: AsyncSession = Depends(get_db),
     def stream():
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["Alarm ID", "Severity", "Status", "Message", "Device", "Station", "First Seen"])
+        # The first 7 columns are unchanged; lifecycle columns are APPENDED so existing spreadsheets keep working.
+        w.writerow(["Alarm ID", "Severity", "Status", "Message", "Device", "Station", "First Seen",
+                    "Last Seen", "Occurrences", "Acknowledged By", "Acknowledged At", "Acknowledge Note",
+                    "Resolved By", "Resolved At", "Resolve Note"])
         for a, d, s in rows:
             w.writerow([a.id, a.severity, a.status, _csv_safe(a.message), _csv_safe(d.hostname),
-                        _csv_safe(s.name), a.first_seen.strftime("%Y-%m-%d %H:%M:%S")])
+                        _csv_safe(s.name), _ts(a.first_seen), _ts(a.last_seen), a.occurrence_count or 1,
+                        _csv_safe(a.acked_by or ""), _ts(a.acked_at), _csv_safe(a.ack_note or ""),
+                        _csv_safe(a.resolved_by or ""), _ts(a.resolved_at), _csv_safe(a.resolve_note or "")])
             if buf.tell() > 64_000:
                 yield buf.getvalue()
                 buf.seek(0)
