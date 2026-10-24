@@ -1,22 +1,21 @@
 import uuid
 from collections.abc import AsyncGenerator
-
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.user import User
 from app.security.tokens import decode_access_token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with request.app.state.sessionmaker() as session:
         yield session
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    bearer: str | None = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     credentials_exception = HTTPException(
@@ -25,7 +24,18 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    # अब decode_access_token एक Dictionary (dict) रिटर्न करता है
+    token = request.headers.get("X-NRIMS-Auth")
+    
+    # STRIP "Bearer " if present
+    if token and token.lower().startswith("bearer "):
+        token = token[7:].strip()
+        
+    if not token:
+        token = bearer
+        
+    if not token:
+        raise credentials_exception
+        
     payload = decode_access_token(token)
     if not payload:
         raise credentials_exception

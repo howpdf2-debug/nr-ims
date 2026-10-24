@@ -5,6 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      // The UI calls /nrims-api/v1/... (see src/lib/api.ts); in dev the same mapping nginx does in production.
+      '/nrims-api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path: string) => path.replace(/^\/nrims-api/, '/api'),
+      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

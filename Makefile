@@ -11,7 +11,7 @@ PYTHON ?= $(shell command -v python3.12 2>/dev/null || command -v python3)
 STAMP := $(VENV)/.nrims-installed
 
 
-.PHONY: diag init creds reset test-integration lock migrate migrations-check seed db-doctor help install lint type test guards ci audit sbom \
+.PHONY: diag init creds reset test-integration test-all smoke-phase2 check-edge lock migrate migrations-check seed db-doctor help install lint type test guards ci audit sbom \
         up down logs ps clean \
         frontend-install frontend-ci frontend-dev dev-backend
 
@@ -139,6 +139,14 @@ test-integration: install  ## needs `make up && make seed` first
 	 NRIMS_DATABASE_URL="postgresql+asyncpg://nrims:$$POSTGRES_PASSWORD@127.0.0.1:$${POSTGRES_HOST_PORT:-5432}/nrims" \
 	 NRIMS_VALKEY_URL="redis://:$$VALKEY_PASSWORD@127.0.0.1:$${VALKEY_HOST_PORT:-6379}/0" \
 	 NRIMS_SEED_ADMIN_PASSWORD="$$NRIMS_SEED_ADMIN_PASSWORD" ../$(VENV)/bin/pytest -q
+
+test-all: ci test-integration frontend-ci  ## everything: guards+ruff+mypy+unit, integration (+migration round-trip), frontend
+
+smoke-phase2:  ## live API smoke test of Phase 2 against the running stack (needs make up && make seed)
+	bash scripts/smoke_phase2.sh
+
+check-edge:  ## what the BROWSER sees through nginx: cache headers, CSP, /nrims-api path, X-NRIMS-Auth (needs make up && make seed)
+	bash scripts/check_edge.sh
 
 lock:  ## regenerate backend/constraints.txt (pinned, reproducible Docker builds)
 	python3.12 -m venv /tmp/nrims-lock && /tmp/nrims-lock/bin/pip install -q --upgrade pip && \

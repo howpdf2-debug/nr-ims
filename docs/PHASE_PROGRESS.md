@@ -1,7 +1,8 @@
 # NR-IMS Phase Progress
 
 ## Current Phase
-- Phase 2f (alarm UI, F-1..F-5 + F-6): status: **done in Claude's sandbox; Codespace + browser verification pending** (`make test-all`, then the browser checklist in the Phase 2f section).
+- Phase 2f.1 (Google Cloud Shell deployment fixes D-1..D-5): **done in Claude's sandbox, verified against a real nginx 1.24 + uvicorn + Postgres; Cloud Shell confirmation pending** (`make up && make check-edge`, then the browser).
+- Phase 2f (alarm UI, F-1..F-5 + F-6): status: **done in Claude's sandbox; browser verification pending** (`make test-all`, then the browser checklist in the Phase 2f section).
 - Phase 2 (backend) was re-verified independently from the delivered ZIP before 2f was built (131 tests x 3 consecutive runs green, 0 leftover rows, no migration drift).
 - Phase 1 was verified in your Codespace earlier (see Completed Phases).
 
@@ -12,6 +13,23 @@
 | 2 | Alarm lifecycle, integrity, maintenance (backend) | _tag after your Codespace `make test-all` is green_ | 2026-10-22 | 9 new + 11 modified (see Phase 2 file list) | 131 collected = 104 unit + 27 integration; sandbox: all 131 pass 3 consecutive runs on one DB (0 leftover rows); ruff 0; mypy 0; `alembic check` no drift from empty and from a seeded DB; migration round-trip (preflight refusal, upgrade+backfill, downgrade, upgrade-back) green |
 | 1 | API/UI contract repair | `phase-1-contract` | 2026-10-21 | 22 changed/new (see Phase 1 list) | 83 collected = 70 unit + 13 integration, all pass on a pristine DB; Phase-1 integration tests re-runnable (0 leftover rows); ruff 0; mypy 0; no schema drift; FE typecheck/build OK, lint at baseline (4 warnings); 8 throwaway jsdom render tests against live payloads pass |
 | 0 | Baseline freeze | `phase-0-baseline` | 2026-10-21 | 14 changed/new (see list below) | 51 collected = 45 unit + 6 integration, all pass (33 unit tests are new); ruff 0; mypy 0; migration gate green and proven to fail on injected drift; frontend typecheck/build OK |
+
+### Phase 2f.1 file list (Cloud Shell)
+Edge/deploy: `frontend/deploy/security-headers.inc`, `frontend/deploy/nginx.conf`, `frontend/vite.config.ts` (dev proxy for the new path), `scripts/check_edge.sh` (new), `Makefile` (`make check-edge`), `README.md` (Cloud Shell section)
+Frontend: `src/lib/api.ts`, `src/lib/chunkReload.ts` (new), `src/main.tsx`, `src/components/ErrorBoundary.tsx`
+Backend: `app/deps.py`, `app/main.py` (CORS allows `X-NRIMS-Auth`)
+Tests (new): `tests/unit/test_auth_token_extraction.py` (13), `tests/integration/test_auth_header_cloudshell.py` (5)
+
+| ID | Symptom in Cloud Shell | Root cause (what was verified vs assumed) | Fix | Status |
+|----|------------------------|-------------------------------------------|-----|--------|
+| D-1 | `Blocked connect-src` for `https://*.cloudshell.dev/api/v1/...` | CSP was `connect-src 'self'`. Likely a SYMPTOM of D-2: the browser also checks a redirect target (the proxy's 302) against connect-src. Widening CSP alone cannot fix the data loading | `connect-src 'self' https://*.cloudshell.dev` (deliberately not `https:`), present on EVERY nginx location (`add_header` inheritance trap checked) | fixed (sandbox) |
+| D-2 | 302 to `ssh.cloud.google.com`, dashboard flashes then Login | Reported by you from the browser; not reproducible outside Cloud Shell. Suspects: the generic `/api/` path and/or the `Authorization` header. Both are removed, so either cause is covered | UI calls `/nrims-api/v1` (nginx maps to backend `/api/`) and sends the JWT as `X-NRIMS-Auth`; backend accepts `X-NRIMS-Auth` first, `Authorization: Bearer` as before (curl/tests/Swagger unchanged); no fall-through when the custom header is invalid; CORS allows the new header | fixed (sandbox); **needs your Cloud Shell confirmation** |
+| D-3 | `Failed to fetch dynamically imported module: Dashboard-xxx.js` | Not "index.html is cached": the shipped nginx ALREADY sent `no-store` on `/` (the edge script passes those checks on the old config). The real cause is a tab opened before the rebuild asking for chunk names that no longer exist | explicit `no-store` blocks for `/index.html` and SPA routes (+`Pragma`, `etag off`), `/assets/` is a real 404 when a name is missing, `immutable` stays on existing assets; the UI reloads itself once (10 s loop guard) on a chunk-load error (`vite:preloadError`, unhandled rejection, ErrorBoundary) | fixed (sandbox) |
+| D-4 | "Login does not work" with no message | A 401 from the LOGIN call triggered the same session-expired reload as an expired token, so the wrong-password message was wiped (this was G-35, identified earlier but never shipped) | 401 on `/auth/login` or without a stored token no longer navigates; the login form shows the server message | fixed (sandbox) |
+| D-5 | (found while testing) API responses carried every security header twice, with two different `Referrer-Policy` values (backend `no-referrer` + nginx `same-origin`) | nginx `add_header` plus the backend middleware | `proxy_hide_header` in the API/health locations: one value, nginx's | fixed (sandbox) |
+
+Behaviour changes: (1) the UI no longer calls `/api/v1` (use `/nrims-api/v1` from the browser; `/api/v1` still works for curl/scripts); (2) the token travels in `X-NRIMS-Auth`; (3) nginx security headers are single-valued on API paths.
+If the 302 still happens in Cloud Shell: open DevTools -> Network, click the failing request, send me its Request URL, Request Headers and the `Location` response header. The next step would be cookie-based auth (already planned for Phase 4), which no proxy treats as credentials.
 
 ### Phase 2f file list
 Frontend (new): `lib/alarms.ts` (types, badge/severity helpers), `lib/alarmSound.ts` (sound engine), `lib/auth.ts` (`getRole`, UI gating only), `components/AlarmStatusBadge.tsx`
@@ -129,6 +147,7 @@ Evidence: **V** = reproduced live on Postgres 16 + Valkey this session, **R** = 
 | G-33 | Setup instructions: placeholder path (`<apne-repo-ka-naam>`) pasted literally; WIP commit made on `main` before the branch switch; tags created although `make ci` had failed; `make ci` result never verified on your side | M | V | hotfix 1.1 | **fixed** (recovery steps given; README corrected) |
 | G-34 | Codespace has `python3.12` without the `venv` module (`python3` is 3.14): `make install` failed, and the failed attempt left a half-made `.venv` (python symlink, no pip) that the fix1 Makefile accepted as valid (`.venv/bin/pip: No such file`) | M | V | hotfix 1.2 | **fixed** (pip-based validity check, self-heals partial venv, prints the apt hint; you still need `sudo apt-get install -y python3.12-venv` once) |
 | F-1..F-6 | Alarm UI gaps (details in the Phase 2f section) | M-H | V/R | 2f | **fixed** (sandbox; browser check pending) |
+| D-1..D-5 | Google Cloud Shell deployment (CSP, proxy interception, stale chunks, silent login 401, duplicate headers) | H | V (nginx/HTTP) / reported (Cloud Shell proxy) | 2f.1 | **fixed** (sandbox); Cloud Shell confirmation pending |
 | G-30 | Device create is check-then-insert with no DB UNIQUE: two concurrent creates can both pass the duplicate check | M | R | P2 (with G-14) | **fixed** (`test_concurrent_device_create_exactly_one_wins_never_500`) |
 
 ## Assumption Log
@@ -177,7 +196,8 @@ Evidence: **V** = reproduced live on Postgres 16 + Valkey this session, **R** = 
 - Frontend tests are still throwaway (vitest + jsdom were NOT added to `package.json`). Phase 7 should adopt `src/lib/alarmSound.ts` and the 29 tests as the first real frontend suite.
 - `alembic.ini` lacks `path_separator = os` (Alembic prints a DeprecationWarning on every test run; harmless today, becomes an error in Alembic 2.x). One-line fix, deferred.
 - Test layout is mixed: `tests/unit/` and `tests/integration/` exist next to older top-level `test_*.py` files; move them in Phase 6.
-- Verified by reading only, not run anywhere: real browser audio, real layout of the drawer at small widths, GitHub Actions.
+- Verified by reading only, not run anywhere: real browser audio, real layout of the drawer at small widths, GitHub Actions, and Google Cloud Shell's own proxy behaviour (only your report; the sandbox proves the edge behaves as designed, not what Google's proxy does).
+- Cloud Shell: only `$HOME` persists. Docker images and the Postgres volume live on the boot disk and disappear when the VM is recycled (`make up && make seed` again). `make fix-network` is Codespaces-only and is skipped automatically.
 
 ## Next Phase
 - Phase 3: Monitoring engine + history (G-05, G-15, G-03 live polling): arq cron poller (ICMP + SNMP) feeding `raise_alarm` / `set_observed_status`, status history table. Starts when you reply `next`, after your Codespace `make test-all` and the Phase 2f browser checklist are green.
