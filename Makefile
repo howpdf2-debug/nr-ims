@@ -11,7 +11,7 @@ PYTHON ?= $(shell command -v python3.12 2>/dev/null || command -v python3)
 STAMP := $(VENV)/.nrims-installed
 
 
-.PHONY: diag init creds reset test-integration test-all smoke-phase2 check-edge lock migrate migrations-check seed db-doctor help install lint type test guards ci audit sbom \
+.PHONY: diag init creds reset test-integration test-all smoke-phase2 check-edge unlock-login lock migrate migrations-check seed db-doctor help install lint type test guards ci audit sbom \
         up down logs ps clean \
         frontend-install frontend-ci frontend-dev dev-backend
 
@@ -147,6 +147,13 @@ smoke-phase2:  ## live API smoke test of Phase 2 against the running stack (need
 
 check-edge:  ## what the BROWSER sees through nginx: cache headers, CSP, /nrims-api path, X-NRIMS-Auth (needs make up && make seed)
 	bash scripts/check_edge.sh
+
+unlock-login:  ## dev only: clear login lockouts (5 wrong passwords lock a user for 15 min, even for the right password)
+	@set -a; . ./.env; set +a; \
+	[ "$$NRIMS_ENV" != production ] || { echo "refusing: NRIMS_ENV=production"; exit 1; }; \
+	docker compose exec -T cache valkey-cli -a "$$VALKEY_PASSWORD" --no-auth-warning \
+	  EVAL "for _,k in ipairs(redis.call('keys','login_fail:*')) do redis.call('del',k) end return 1" 0 >/dev/null \
+	&& echo "login lockouts cleared"
 
 lock:  ## regenerate backend/constraints.txt (pinned, reproducible Docker builds)
 	python3.12 -m venv /tmp/nrims-lock && /tmp/nrims-lock/bin/pip install -q --upgrade pip && \

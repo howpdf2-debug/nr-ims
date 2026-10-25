@@ -44,3 +44,8 @@ logs/
 *.zip
 diag.txt
 *.bak
+*.swp
+*.save
+*.save.*
+*.old*
+*.orig

@@ -1,17 +1,33 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.health import router as health_router
 from app.api.v1 import (
-    actions, alarms, audit, auth, dashboard, devices, discovery,
-    links, reports, stations, topology, topology_local, users,
+    actions,
+    alarms,
+    audit,
+    auth,
+    dashboard,
+    devices,
+    discovery,
+    links,
+    reports,
+    stations,
+    topology,
+    topology_local,
+    users,
+    monitoring,
 )
 from app.cache import build_cache
 from app.config import Settings, get_settings
 from app.db.session import build_engine, build_sessionmaker
 from app.logging_config import configure_logging
 
-_V1 = (auth, devices, alarms, dashboard, actions, stations, links, topology, topology_local, audit, discovery, users, reports)
+_V1 = (auth, devices, alarms, dashboard, actions, stations, links, topology, topology_local, audit, discovery,
+       users, reports, monitoring)
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
@@ -29,7 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs" if docs else None, redoc_url=None, openapi_url="/openapi.json" if docs else None,
     )
     app.state.settings = settings
-    app.state.engine = build_engine(settings)
+    app.state.engine = build_engine(settings)  # one engine per app (was: two)
     app.state.sessionmaker = build_sessionmaker(app.state.engine)
     app.state.cache = build_cache(settings)
 
@@ -47,8 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-NRIMS-Auth"],
-        expose_headers=["X-Total-Count", "X-NRIMS-Auth"],
+        allow_headers=["Authorization", "Content-Type", "X-NRIMS-Auth"],  # X-NRIMS-Auth: see app/deps.py
+        expose_headers=["X-Total-Count"],
     )
 
     app.include_router(health_router)

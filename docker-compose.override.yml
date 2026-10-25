@@ -10,6 +10,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     user: "0:0"                             # root — NET_RAW effective (Step 0.12)
+    cap_add: [NET_RAW]
     environment:
       NRIMS_ENV: ${NRIMS_ENV:-development}
       NRIMS_DATA_PROVIDER: ${NRIMS_DATA_PROVIDER:-simulator}
@@ -21,6 +22,8 @@ services:
       NRIMS_CORS_ORIGINS: ${NRIMS_CORS_ORIGINS:-[]}
       NRIMS_DOCS_ENABLED: ${NRIMS_DOCS_ENABLED:-true}
       NRIMS_SEED_ADMIN_PASSWORD: ${NRIMS_SEED_ADMIN_PASSWORD:-}
+      NRIMS_CREDENTIAL_KEY: ${NRIMS_CREDENTIAL_KEY:?run make init}
+      NRIMS_SNMP_ALLOWED_CIDRS: '${NRIMS_SNMP_ALLOWED_CIDRS:-["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","127.0.0.0/8"]}'
     command: ["arq", "arq_worker.WorkerSettings"]
     depends_on:
       db:      { condition: service_healthy }
