@@ -4,7 +4,7 @@ Needs NRIMS_INTEGRATION=1 and a migrated + seeded DB. Read-only: creates nothing
 """
 import os
 
-from tests.conftest import V1
+V1 = "/api/v1"
 
 PW = os.getenv("NRIMS_SEED_ADMIN_PASSWORD", "Str0ng-Test-Pass1")
 
