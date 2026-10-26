@@ -1,6 +1,7 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import { isChunkLoadError, reloadOnce } from "../lib/chunkReload";
 
 interface BoundaryProps {
   children: ReactNode;
@@ -26,10 +27,21 @@ class Boundary extends Component<BoundaryProps, BoundaryState> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("UI render error:", error, info.componentStack);
+    // A lazy route whose chunk vanished after a deploy: fetch the new build instead of showing an error.
+    if (isChunkLoadError(error)) reloadOnce();
   }
 
   render() {
     if (!this.state.error) return this.props.children;
+    if (isChunkLoadError(this.state.error)) {
+      return (
+        <div role="alert" className="data-card" style={{ margin: "2rem", maxWidth: 640 }}>
+          <h2 style={{ marginTop: 0 }}>A new version of NR-IMS is available</h2>
+          <p style={{ color: "var(--text-muted)" }}>This page was opened before the last update. Reload to continue.</p>
+          <button className="btn" style={{ width: "auto" }} onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      );
+    }
     return (
       <div role="alert" className="data-card" style={{ margin: "2rem", maxWidth: 640 }}>
         <h2 style={{ marginTop: 0, color: "var(--accent-red)" }}>Something went wrong on this page</h2>

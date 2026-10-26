@@ -27,4 +27,14 @@ __all__ = [
     "ConfigurationChange",
     "DeviceLink",
     "DiscoveredDevice",
+    "DeviceMetric",
+    "DevicePollState",
+    "InterfaceMetric",
+    "SnmpCredentialProfile",
 ]
+from app.models.monitoring import (
+    DeviceMetric,
+    DevicePollState,
+    InterfaceMetric,
+    SnmpCredentialProfile,
+)

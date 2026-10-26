@@ -1,0 +1,103 @@
+# NR-IMS SNMP vendor profiles
+# ---------------------------------------------------------------------------------------------------------
+# Tells the poller WHICH OIDs hold CPU, memory and temperature for each kind of device. Interface counters
+# use the standard IF-MIB for every vendor and are NOT configured here.
+#
+# HOW A DEVICE PICKS A PROFILE: the first profile (in file order) whose `sys_object_id_prefix` matches the
+# device's sysObjectID, or whose `sys_descr_regex` matches its sysDescr. If none matches, the profile marked
+# `default = true` is used.
+#
+# TEACHING IT A NEW VENDOR (e.g. Nivetti), no code change needed:
+#   1. python -m app.monitoring.cli explore <router-ip>      (arrives in Phase 3a-2; walks the enterprise tree)
+#   2. fill the [[profile]] block below, restart the worker
+#   3. python -m app.monitoring.cli probe <router-ip>        (shows what was collected)
+#
+# `cpu` and `temperature`: list of sources, tried in order, the first one that returns a value wins.
+# `memory`: list of specs, tried in order. A spec is ONE of: `percent`, or `used`+`free`, or `total`+`available`.
+# A source is: oid, mode ("scalar" = one GET, "walk" = walk a column), aggregate (max/avg/min/first, for walks),
+#   scale (multiply), invert_percent (100 - value, e.g. "idle" -> "busy"), ignore_zero (drop 0 readings).
+# A profile with `inherits = "<name>"` copies any of cpu/memory/temperature it leaves EMPTY from that profile.
+# OIDs below are from the vendors' public MIBs and are verified only against a simulator: confirm them once on
+# real equipment with the `probe` command.
+
+version = 1
+
+# ---------------------------------------------------------------------------------------------------------
+[[profile]]
+name = "cisco"
+sys_object_id_prefix = "1.3.6.1.4.1.9."
+notes = "CISCO-PROCESS-MIB, CISCO-MEMORY-POOL-MIB, CISCO-ENVMON-MIB"
+
+[[profile.cpu]]
+oid = "1.3.6.1.4.1.9.9.109.1.1.1.1.8"   # cpmCPUTotal5minRev
+mode = "walk"
+aggregate = "max"
+
+[[profile.memory]]
+[profile.memory.used]
+oid = "1.3.6.1.4.1.9.9.48.1.1.1.5.1"    # ciscoMemoryPoolUsed, pool 1 = Processor
+[profile.memory.free]
+oid = "1.3.6.1.4.1.9.9.48.1.1.1.6.1"    # ciscoMemoryPoolFree, pool 1
+
+[[profile.temperature]]
+oid = "1.3.6.1.4.1.9.9.13.1.3.1.3"      # ciscoEnvMonTemperatureStatusValue
+mode = "walk"
+aggregate = "max"
+
+# ---------------------------------------------------------------------------------------------------------
+[[profile]]
+name = "huawei"
+sys_object_id_prefix = "1.3.6.1.4.1.2011."
+notes = "HUAWEI-ENTITY-EXTENT-MIB (VRP)"
+
+[[profile.cpu]]
+oid = "1.3.6.1.4.1.2011.5.25.31.1.1.1.1.5"    # hwEntityCpuUsage (%)
+mode = "walk"
+aggregate = "max"
+
+[[profile.memory]]
+[profile.memory.percent]
+oid = "1.3.6.1.4.1.2011.5.25.31.1.1.1.1.7"    # hwEntityMemUsage (%)
+mode = "walk"
+aggregate = "max"
+
+[[profile.temperature]]
+oid = "1.3.6.1.4.1.2011.5.25.31.1.1.1.1.11"   # hwEntityTemperature (deg C)
+mode = "walk"
+aggregate = "max"
+ignore_zero = true                            # entities without a sensor report 0
+
+# ---------------------------------------------------------------------------------------------------------
+# Nivetti NiOS: PLACEHOLDER. Until real OIDs are known it matches on sysDescr text and uses the generic
+# (HOST-RESOURCES / UCD-SNMP) metrics via `inherits`, so a Nivetti router is still monitored for
+# reachability, uptime and interfaces. When you know the enterprise number and OIDs:
+#   * uncomment `sys_object_id_prefix` and put the real enterprise number in it
+#   * add [[profile.cpu]] / [[profile.memory]] / [[profile.temperature]] blocks (a non-empty list REPLACES
+#     the generic one for that metric)
+[[profile]]
+name = "nivetti"
+inherits = "generic"
+sys_descr_regex = "(?i)nivetti|nios"
+# sys_object_id_prefix = "1.3.6.1.4.1.<NIVETTI-ENTERPRISE-NUMBER>."
+notes = "PLACEHOLDER: generic metrics until Nivetti OIDs are added"
+
+# ---------------------------------------------------------------------------------------------------------
+[[profile]]
+name = "generic"
+default = true
+notes = "HOST-RESOURCES-MIB and UCD-SNMP-MIB (Linux/net-snmp style agents)"
+
+[[profile.cpu]]
+oid = "1.3.6.1.2.1.25.3.3.1.2"          # hrProcessorLoad
+mode = "walk"
+aggregate = "avg"
+
+[[profile.cpu]]
+oid = "1.3.6.1.4.1.2021.11.11.0"        # ssCpuIdle (idle %), so busy = 100 - idle
+invert_percent = true
+
+[[profile.memory]]
+[profile.memory.total]
+oid = "1.3.6.1.4.1.2021.4.5.0"          # memTotalReal
+[profile.memory.available]
+oid = "1.3.6.1.4.1.2021.4.6.0"          # memAvailReal

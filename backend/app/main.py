@@ -13,6 +13,7 @@ from app.api.v1 import (
     devices,
     discovery,
     links,
+    monitoring,
     reports,
     stations,
     topology,
@@ -25,7 +26,7 @@ from app.db.session import build_engine, build_sessionmaker
 from app.logging_config import configure_logging
 
 _V1 = (auth, devices, alarms, dashboard, actions, stations, links, topology, topology_local, audit, discovery,
-       users, reports)
+       users, reports, monitoring)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,7 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-NRIMS-Auth"],  # X-NRIMS-Auth: see app/deps.py
         expose_headers=["X-Total-Count"],
     )
 

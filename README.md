@@ -28,6 +28,22 @@ GitHub Codespaces: `make up` automatically applies the Docker-in-Docker network 
 
 Frontend: `make frontend-ci` (lint, typecheck, build).
 
+## Google Cloud Shell (Web Preview)
+
+Cloud Shell's Web Preview proxy intercepts the generic `/api/` path and a browser `Authorization` header (302 to a
+Google sign-in page), so the UI talks to the API through a neutral path and header instead: it calls `/nrims-api/v1/...`
+(nginx maps it to the backend's `/api/v1/...`) and sends the token as `X-NRIMS-Auth`. The old `/api/v1` + `Authorization`
+still work for curl, scripts and Swagger.
+
+    cd ~/nr-ims
+    grep -q '^HTTP_PORT=' .env && sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8080/' .env || echo 'HTTP_PORT=8080' >> .env
+    make up && make seed          # make seed only when the database is empty
+    make check-edge               # what the browser sees through nginx: all lines must say PASS
+    make creds                    # login; then: Web Preview (top right) -> "Preview on port 8080"
+
+Cloud Shell keeps only `$HOME`: if the VM is recycled, Docker images and the database are gone, so run
+`make up && make seed` again. After every update open the site once with a hard refresh (Ctrl+Shift+R).
+
 ## Quality gates (also run by `.github/workflows/ci.yml`)
 
 | Gate | Command |

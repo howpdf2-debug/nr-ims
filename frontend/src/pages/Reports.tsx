@@ -104,7 +104,7 @@ export default function Reports() {
         <KPICard title="Network Uptime" value={`${kpi.uptime_pct}%`} icon={<ShieldCheck size={24} color="#4ade80" />} color="#4ade80" />
         <KPICard title="Total Devices" value={kpi.total_devices} icon={<Server size={24} color="#3b82f6" />} color="#3b82f6" />
         <KPICard title="Down Devices" value={kpi.down_devices} icon={<Activity size={24} color="#ef4444" />} color="#ef4444" />
-        <KPICard title="Active Alarms" value={kpi.active_alarms} icon={<AlertTriangle size={24} color="#f59e0b" />} color="#f59e0b" />
+        <KPICard title="Open Alarms" value={kpi.open_alarms} sub={`${kpi.active_alarms} unacknowledged · ${kpi.acknowledged_alarms} acknowledged · ${kpi.resolved_alarms} resolved`} icon={<AlertTriangle size={24} color="#f59e0b" />} color="#f59e0b" />
       </div>
 
       {/* Fluid Charts Layout (Auto Adjusts from 2 cols to 1 col) */}
@@ -133,7 +133,7 @@ export default function Reports() {
   );
 }
 
-function KPICard({ title, value, icon, color }: { title: string; value: any; icon: any; color: string }) {
+function KPICard({ title, value, icon, color, sub }: { title: string; value: any; icon: any; color: string; sub?: string }) {
   return (
     <div style={{ background: "var(--bg-surface)", padding: "1.5rem", borderRadius: "12px", border: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: "1rem" }}>
       <div style={{ background: `${color}20`, padding: "1rem", borderRadius: "50%", flexShrink: 0 }}>
@@ -142,6 +142,7 @@ function KPICard({ title, value, icon, color }: { title: string; value: any; ico
       <div style={{ overflow: "hidden" }}>
         <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.5px", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{title}</p>
         <h2 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 700 }}>{value}</h2>
+        {sub && <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>{sub}</p>}
       </div>
     </div>
   );
