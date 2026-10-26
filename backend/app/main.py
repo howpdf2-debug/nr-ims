@@ -13,12 +13,12 @@ from app.api.v1 import (
     devices,
     discovery,
     links,
+    monitoring,
     reports,
     stations,
     topology,
     topology_local,
     users,
-    monitoring,
 )
 from app.cache import build_cache
 from app.config import Settings, get_settings
