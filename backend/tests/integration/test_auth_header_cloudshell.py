@@ -1,11 +1,13 @@
-import os
-import pytest
-pytestmark = pytest.mark.skipif(not os.getenv("NRIMS_INTEGRATION"), reason="Needs NRIMS_INTEGRATION=1")
 """X-NRIMS-Auth end to end (the header the UI sends so proxies do not mistake it for their own Authorization).
 
 Needs NRIMS_INTEGRATION=1 and a migrated + seeded DB. Read-only: creates nothing.
 """
+
 import os
+
+import pytest
+
+pytestmark = pytest.mark.skipif(not os.getenv("NRIMS_INTEGRATION"), reason="Needs NRIMS_INTEGRATION=1")
 
 V1 = "/api/v1"
 
