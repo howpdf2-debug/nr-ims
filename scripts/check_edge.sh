@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Edge smoke test: what the BROWSER sees through nginx (cache headers, CSP, API alias path, token header).
 #   bash scripts/check_edge.sh                      # reads HTTP_PORT and NRIMS_SEED_ADMIN_PASSWORD from .env
-#   BASE=http://127.0.0.1:8080 PW=secret USER_EMAIL=bsb@nr-ims.local bash scripts/check_edge.sh
+#   NRIMS_EDGE_BASE=http://127.0.0.1:8080 NRIMS_EDGE_USER=bsb@nr-ims.local NRIMS_EDGE_PASSWORD=secret \
+#     bash scripts/check_edge.sh
+# Only the NRIMS_EDGE_* names are read from the environment. Generic names such as USER_EMAIL, PW or BASE are
+# deliberately NOT used: many shells (Google Cloud Shell among them) already export USER_EMAIL as YOUR Google
+# account, which used to be sent to the login form instead of the seeded dev user.
 # Exit code 0 = all checks passed, 1 = a check failed, 2 = nothing answers at $BASE.
 # Needs: curl, python3, a running stack with the dev users seeded (make seed).
 #
@@ -10,11 +14,15 @@
 set -u
 cd "$(dirname "$0")/.."
 envval() { [ -f .env ] && grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
-PORT="${HTTP_PORT:-$(envval HTTP_PORT)}"; PORT="${PORT:-80}"
-BASE="${BASE:-http://127.0.0.1:${PORT}}"
-PW="${PW:-$(envval NRIMS_SEED_ADMIN_PASSWORD)}"
-USER_EMAIL="${USER_EMAIL:-irca@nr-ims.local}"
 FAILS=0
+IGNORED=""
+for v in USER_EMAIL PW BASE; do   # generic names that may already exist in the environment: never read
+  [ -n "${!v:-}" ] && IGNORED="$IGNORED $v"
+done
+PORT="${HTTP_PORT:-$(envval HTTP_PORT)}"; PORT="${PORT:-80}"
+BASE="${NRIMS_EDGE_BASE:-http://127.0.0.1:${PORT}}"
+PW="${NRIMS_EDGE_PASSWORD:-$(envval NRIMS_SEED_ADMIN_PASSWORD)}"
+USER_EMAIL="${NRIMS_EDGE_USER:-irca@nr-ims.local}"
 
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; FAILS=$((FAILS + 1)); }
@@ -60,7 +68,7 @@ diagnose_login() {
     401) echo "       -> nginx and the backend are fine, but they do not accept these credentials. Usually:"
          echo "          (a) the database has NO users: a recycled Cloud Shell VM starts with an empty database -> make seed"
          echo "          (b) the password in .env is not the one the users were created with -> make creds, compare"
-         echo "          (c) $USER_EMAIL is not a seeded user -> USER_EMAIL=bsb@nr-ims.local bash scripts/check_edge.sh"
+         echo "          (c) $USER_EMAIL is not a seeded user -> NRIMS_EDGE_USER=bsb@nr-ims.local bash scripts/check_edge.sh"
          if command -v docker >/dev/null 2>&1; then
            local n; n=$(timeout 15 docker compose exec -T db psql -U nrims -d nrims -Atc 'select count(*) from users' 2>/dev/null | tr -d '[:space:]')
            [ -n "$n" ] && echo "          users in the database right now: $n  $([ "$n" = 0 ] && echo '<- EMPTY: run make seed')"
@@ -71,7 +79,8 @@ diagnose_login() {
   esac
 }
 
-echo "Edge check against $BASE"
+echo "Edge check against $BASE, logging in as $USER_EMAIL (override: NRIMS_EDGE_USER / NRIMS_EDGE_PASSWORD / NRIMS_EDGE_BASE)"
+[ -n "$IGNORED" ] && echo "note: your shell defines$IGNORED; ignored on purpose (this script only reads the NRIMS_EDGE_* names)"
 [ "$(curl -s -m 5 "$BASE/nginx-health")" = "ok" ] || { echo "nginx does not answer at $BASE (is the stack up? HTTP_PORT?)"; exit 2; }
 
 CSP_RE="^content-security-policy:.*connect-src 'self' https://\*\.cloudshell\.dev"
@@ -99,7 +108,7 @@ expect_code "a chunk that no longer exists is a real 404 (not the HTML shell)" 4
 
 echo "4. Login and API through /nrims-api with X-NRIMS-Auth (no Authorization header)"
 if [ -z "$PW" ]; then
-  bad "no password: set PW=... or NRIMS_SEED_ADMIN_PASSWORD in .env (make creds)"
+  bad "no password: set NRIMS_EDGE_PASSWORD=... or NRIMS_SEED_ADMIN_PASSWORD in .env (make creds)"
   TOKEN=""
 else
   login /nrims-api/v1
