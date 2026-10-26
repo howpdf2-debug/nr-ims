@@ -1,18 +1,20 @@
-"""Phase 2 stub — Account 1 owns the real implementation."""
-from __future__ import annotations
+"""Observed device status, as reported by the poller (Phase 3a-2).
 
-import logging
-from typing import Any
+    set_observed_status(db, device, status) -> None
 
-log = logging.getLogger(__name__)
-_W = False
+The status column follows what monitoring saw. A device that an operator put into maintenance keeps its
+``maintenance`` status: the poller still calls this for such devices every cycle, and the observation must not
+silently end the maintenance. The caller owns the transaction (commit).
+"""
 
-def _w() -> None:
-    global _W
-    if not _W:
-        _W = True
-        log.warning("app.services.maintenance is a STUB — status not updated")
+from sqlalchemy.ext.asyncio import AsyncSession
 
-async def set_observed_status(db: Any, device: Any, status: str) -> Any:
-    _w()
-    return None
+from app.models.device import Device
+
+
+async def set_observed_status(db: AsyncSession, device: Device, status: str) -> None:
+    """Set ``device.status`` to the observed ``status`` unless it is unchanged or the device is in maintenance."""
+    if device.is_maintenance or device.status == status:
+        return
+    device.status = status
+    db.add(device)

@@ -443,6 +443,6 @@ def test_migration_is_chained_after_phase2_with_a_single_head():
     cfg = Config(str(BACKEND / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    rev = script.get_revision("b7e19c3a5d20")
-    assert rev is not None and rev.down_revision == "c4d2a8f61b30"
+    rev = script.get_revision("c4d2a8f61b30")
+    assert rev is not None and rev.down_revision == "b7e19c3a5d20"
     assert len(script.get_heads()) == 1
